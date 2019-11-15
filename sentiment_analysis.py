@@ -1,21 +1,89 @@
 import os
 import logging
 import argparse
+import nltk
+import string
 import pandas as pd
+import numpy as np
 from sklearn import model_selection
 from sklearn import svm
 from sklearn import naive_bayes
 from sklearn import metrics
 from sklearn.feature_extraction.text import CountVectorizer
 
-def get_corpus(path):
+def get_parser():
     '''
-    Given root folder name, function goes through all subfolders,
-    reads files and their positive/negative ratings and
-    puts all informations in Data Frame structure.
-    param input: corpus root folder name
+    Function processes arguments from command line.
+    param input: None
+    return: None
+
+    '''
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--log_level', required=False,
+                        help='Set logging level [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]')
+    parser.add_argument('-t', '--test_percentage', required=False,
+                        help='Set the percentage for test data [0-100]')
+    arguments = vars(parser.parse_args())
+
+    return arguments
+
+def set_loging_level(args):
+    '''
+    Given argument parser, function sets the logging level chosen from command line.
+    param input: argument parser
+    return: None
+
+    '''
+    log_level = args['log_level'] if args['log_level'] != None else 'INFO'
+    numeric_level = getattr(logging, log_level.upper(), None)
+    logging.basicConfig(level=numeric_level)
+
+def nltk_dependencies():
+    '''
+    Function downloads required NLTK data.
+    param input: None
+    return: None
+
+    '''
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    try:
+        nltk.data.find('tokenizers/averaged_perceptron_tagger')
+    except LookupError:
+        nltk.download('averaged_perceptron_tagger')
+
+def get_srb_corpus():
+    '''
+    Function goes through all data with Serbian reviews, reads reviews and their positive/negative/neutral ratings
+    and puts all informations in Data Frame structure.
+    param input: None
     return: Data Frame structure with extracted informations from corpus
+
     '''
+    path = 'SerbMR-3C.csv'
+
+    try:
+        data = pd.read_csv(path, encoding='utf-8')
+    except OSError:
+        logging.ERROR('Could not open: {}', path)
+        sys.exit()
+
+    data.columns = ['Text', 'Rating']
+
+    return data.Text, data.Rating
+
+def get_eng_corpus():
+    '''
+    Function goes through all path subfolders with English reviews, reads files and their positive/negative ratings
+    and puts all informations in Data Frame structure.
+    param input: None
+    return: Data Frame structure with extracted informations from corpus
+
+    '''
+    path = 'review_polarity/txt_sentoken'
+
     corpus, classes = [], []
     for root, directories, files in os.walk(path):
         for file in files:
@@ -26,25 +94,177 @@ def get_corpus(path):
                 classes.append('NEGATIVE')
             else:
                 logging.ERROR('Unknown type of class')
-            f = open(absolute_path, 'r')
-            corpus.append(f.read())
+            try:
+                f = open(absolute_path, 'r')
+                corpus.append(f.read())
+            except OSError:
+                logging.ERROR('Could not open: {}', absolute_path)
+                sys.exit()
 
     data = {'Text': corpus, 'Rating': classes}
-    df = pd.DataFrame(data)
+    data = pd.DataFrame(data)
 
-    return df
+    return data.Text, data.Rating
 
-def bag_of_words(corpus):
+def remove_punctuation(corpus):
     '''
-    Given corpus, function creates a vector of token counts using Count Vectorizer class.
+    Given corpus, function removes punctuation in all corpus documents.
     param input: corpus
-    return: bag of words model - vector of token counts
+    return: corpus w/o punctuation
 
     '''
-    vectorizer = CountVectorizer()
+    cleaned_text = []
+    replacer = str.maketrans(dict.fromkeys(string.punctuation))
+    for c in corpus:
+        cleaned_text.append(c.translate(replacer))
+
+    return cleaned_text
+
+
+def generate_ngrams(corpus, n):
+    '''
+    Given corpus and number n (n stands for ngram), function extracts all ngrams from all files in corpus
+    For n = 1 this function creates a bag of words model
+    param input: corpus, number n
+    return: vector of ngrams
+
+    '''
+    vectorizer = CountVectorizer(ngram_range=(1,n))
     c = vectorizer.fit_transform(corpus)
 
     return c.toarray()
+
+def get_part_of_speech_words(corpus):
+    '''
+    Given corpus, function uses English POS tagger for tagging all words in corpus.
+    param input: corpus
+    return: tagged words (tuple shape (word, tag))
+
+    '''
+    tags = []
+    for c in corpus:
+        sentences = nltk.word_tokenize(c)
+        tagged_sentences = nltk.pos_tag(sentences)
+        tags.append(tagged_sentences)
+
+    return tags
+
+def create_tag_vocabulary(tags):
+    '''
+    Given tagged word list (tuple shape (word, tag)), function creates a list of unique sorted tuples - vocabulary.
+    param input: tagged word list
+    return: vocabulary
+
+    '''
+    vocabulary = []
+    for t in tags:
+        vocabulary.extend(t)
+
+    vocabulary = sorted(list(set(vocabulary)))
+
+    return vocabulary
+
+def create_tagging_model(tags, vocabulary):
+    '''
+    Given list of tagged words and tagged vocabulary, functions creates a vector of token counts.
+    param input: list of tagged words and tagged vocabulary
+    return: appropriate (vector of token counts) model for ML algorithms
+
+    '''
+    pos_tag = np.zeros((len(tags), len(vocabulary)))
+    for i, tag in enumerate(tags):
+        document = np.zeros(len(vocabulary))
+        for t in tags[i]:
+            for j, word in enumerate(vocabulary):
+                if word == t:
+                    document[j] += 1
+        pos_tag[i] = document
+
+    return pos_tag
+
+def part_of_speech_tagging(corpus):
+    '''
+    Given corpus, function creates tagged words, a vocabulary and appropriate model for ML algorithms.
+    param input: corpus
+    return: appropriate model for ML algorithms
+
+    '''
+    tags = get_part_of_speech_words(corpus)
+    vocabulary = create_tag_vocabulary(tags)
+    pos_tag = create_tagging_model(tags, vocabulary)
+
+    return pos_tag
+
+
+def get_word_position(corpus):
+    '''
+    Given corpus, function is tagging every word regarding the position in the document - begin, midle or end.
+    param input: corpus
+    return: tagged words (tuple shape (word, position tag))
+
+    '''
+    tags = []
+    for c in corpus:
+        words = nltk.word_tokenize(c)
+        word_number = len(words)
+        list_begin = zip(words[:word_number//3], ['begin' for i in range(word_number//3)])
+        l = list(list_begin)
+        list_midle = zip(words[word_number//3:2*word_number//3], ['midle' for i in range(word_number//3)])
+        l.extend(list(list_midle))
+        list_end = zip(words[2*word_number//3:], ['end' for i in range(word_number//3)])
+        l.extend(list(list_end))
+        tags.append(l)
+
+    return tags
+
+def word_position_tagging(corpus):
+    '''
+    Given corpus, function creates tagged words, a vocabulary and appropriate model for ML algorithms.
+    param input: corpus
+    return: appropriate model for ML algorithms
+
+    '''
+    tags = get_word_position(corpus)
+    vocabulary = create_tag_vocabulary(tags)
+    word_position_tag = create_tagging_model(tags, vocabulary)
+
+    return word_position_tag
+
+def text_preprocessing(corpus, language):
+    '''
+    Given corpus and language indicator, function creates different types of representations:
+    - bag of words model
+    - bigram model
+    - part of speech model
+    - word position model
+    param input: corpus, language indicator
+    return: bag of words model, bigram model, part of speech model, word position model
+
+    '''
+    language = 'Serbian' if language == 'srb' else 'English'
+
+    # Remove punctuation
+    cleaned_corpus = remove_punctuation(corpus)
+
+    # Get the bag of words model
+    bag_of_words_model = generate_ngrams(cleaned_corpus, 1)
+    logging.debug('Bag of words for {} reviews:\n {}'.format(language, bag_of_words_model))
+
+    # Get the bigram model
+    bigram_model = generate_ngrams(cleaned_corpus, 2)
+    logging.debug('Bigram model for {} reviews:\n {}'.format(language, bigram_model))
+
+    # Get the word position model
+    word_position_model = word_position_tagging(cleaned_corpus)
+    logging.debug('Word position model for {} reviews:\n {}'.format(language, word_position_model))
+
+    # Get the part of speech tag
+    if language == 'English':
+        pos_tag_model = part_of_speech_tagging(cleaned_corpus)
+        logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
+        return bag_of_words_model, bigram_model, pos_tag_model, word_position_model
+
+    return bag_of_words_model, bigram_model, word_position_model
 
 def svm_classifier(X_train, X_test, y_train, y_test):
     '''
@@ -76,62 +296,58 @@ def nb_classifier(X_train, X_test, y_train, y_test):
 
     return metrics.accuracy_score(y_test, y_pred)
 
+def classification(data, classes, test_size):
+    '''
+    Given data, classes and size parameter, function splits the data in groups for training and testing (size for test group is test_size).
+    Afterwards, function trains the model data using SVM and NB algorithms and calculates the accuracy between predicted and test data.
+    param input: data, classes and size parameter
+    return: None
+
+    '''
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(
+                                        data, classes, test_size=test_size)
+
+    score = svm_classifier(X_train, X_test, y_train, y_test)
+    logging.info('SVM accuracy: {}\n'.format(score))
+
+    score = nb_classifier(X_train, X_test, y_train, y_test)
+    logging.info('NB accuracy: {}\n'.format(score))
+
+
 if __name__ == '__main__':
 
     # Set the argument parser
-    ap = argparse.ArgumentParser()
-    ap.add_argument('-l', '--log_level', required=False, help='Set logging level [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]')
-    ap.add_argument('-t', '--test_percentage', required=False, help='Set the percentage for test data [0-100]')
-    args = vars(ap.parse_args())
+    args = get_parser()
 
     # Set logging level
-    log_level = args['log_level'] if args['log_level'] != None else 'INFO'
-    numeric_level = getattr(logging, log_level.upper(), None)
-    logging.basicConfig(level=numeric_level)
+    set_loging_level(args)
 
-    # Get the dataset for Serbian reviews
-    file_path_srb = 'SerbMR-3C.csv'
-    try:
-        corpus_srb = pd.read_csv(file_path_srb, encoding='utf-8')
-    except OSError:
-        logging.ERROR('Could not open: {}', file_path_srb)
-        sys.exit()
-    corpus_srb.columns = ['Text', 'Rating']
-    corpus_srb, classes_srb = corpus_srb.Text, corpus_srb.Rating
+    # Install nltk dependencies
+    nltk_dependencies()
 
+    # Get the datasets for Serbian and English reviews
+    corpus_srb, classes_srb = get_srb_corpus()
+    corpus_eng, classes_eng = get_eng_corpus()
 
-    # Get the dataset for English reviews
-    file_path_eng = 'review_polarity/txt_sentoken'
-    try:
-        corpus = get_corpus(file_path_eng)
-    except OSError:
-        logging.ERROR('Could not open: {}', file_path_eng)
-        sys.exit()
-    corpus_eng, classes_eng = corpus.Text, corpus.Rating
+    # Get different data representations: bag of words, bigrams, part of speech tagging, word position tagging
+    bow_srb, bigram_srb, position_srb = text_preprocessing(corpus_srb, 'srb')
+    bow_eng, bigram_eng, pos_tag_eng, position_eng = text_preprocessing(corpus_eng, 'eng')
 
-    # Get the bag of words model
-    bag_of_words_model_srb = bag_of_words(corpus_srb)
-    logging.debug('Bag of words for Serbian reviews:\n {}'.format(bag_of_words_model_srb))
-    bag_of_words_model_eng = bag_of_words(corpus_eng)
-    logging.debug('Bag of words for English reviews:\n {}'.format(bag_of_words_model_eng))
-    
-    # Split the dataset for training and testing
+    # Classification
     test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.3
 
-    X_train_srb, X_test_srb, y_train_srb, y_test_srb = model_selection.train_test_split(
-                                        bag_of_words_model_srb, classes_srb, test_size=test_size)
+    logging.info(' --- Serbian reviews (Bag Of Words Model) --- \n')
+    classification(bow_srb, classes_srb, test_size)
+    logging.info(' --- Serbian reviews (Bigram Model) --- \n')
+    classification(bigram_srb, classes_srb, test_size)
+    logging.info(' --- Serbian reviews (Word Position Model) --- \n')
+    classification(position_srb, classes_srb, test_size)
+    logging.info(' --- English reviews (Bag Of Words Model) --- \n')
+    classification(bow_eng, classes_eng, test_size)
+    logging.info(' --- English reviews (Bigram Model) --- \n')
+    classification(bigram_eng, classes_eng, test_size)
+    logging.info(' --- English reviews (Part Of Speech Model) --- \n')
+    classification(pos_tag_eng, classes_eng, test_size)
+    logging.info(' --- English reviews (Word Position Model) --- \n')
+    classification(position_eng, classes_eng, test_size)
 
-    X_train_eng, X_test_eng, y_train_eng, y_test_eng = model_selection.train_test_split(
-                                        bag_of_words_model_eng, classes_eng, test_size=test_size)
-
-    # SVM algorithm
-    score = svm_classifier(X_train_srb, X_test_srb, y_train_srb, y_test_srb)
-    logging.info('SVM accuracy for Serbian reviews: {}'.format(score))
-    score = svm_classifier(X_train_eng, X_test_eng, y_train_eng, y_test_eng)
-    logging.info('SVM accuracy for English reviews: {}'.format(score))
-
-    # NB algorithm
-    score = nb_classifier(X_train_srb, X_test_srb, y_train_srb, y_test_srb)
-    logging.info('NB accuracy for Serbian reviews: {}'.format(score))
-    score = nb_classifier(X_train_eng, X_test_eng, y_train_eng, y_test_eng)
-    logging.info('NB accuracy for English reviews: {}'.format(score))
