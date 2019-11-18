@@ -10,6 +10,7 @@ from sklearn import svm
 from sklearn import naive_bayes
 from sklearn import metrics
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 def get_parser():
     '''
@@ -120,7 +121,6 @@ def remove_punctuation(corpus):
 
     return cleaned_text
 
-
 def generate_ngrams(corpus, n):
     '''
     Given corpus and number n (n stands for ngram), function extracts all ngrams from all files in corpus
@@ -195,7 +195,6 @@ def part_of_speech_tagging(corpus):
 
     return pos_tag
 
-
 def get_word_position(corpus):
     '''
     Given corpus, function is tagging every word regarding the position in the document - begin, midle or end.
@@ -230,6 +229,32 @@ def word_position_tagging(corpus):
 
     return word_position_tag
 
+def compute_tf(corpus):
+    '''
+    Given bow corpus model, function calculates frequency of every word in all documents in the corpus and returns a matrix of tf.
+    param input: corpus
+    return: matrix of term frequencies
+
+    '''
+    tf_matrix = np.zeros(corpus.shape)
+    for i in range(len(corpus)):
+        for j in range(len(corpus[i])):
+            tf_matrix[i][j] = corpus[i][j] / len(corpus[i])
+
+    return tf_matrix
+
+def compute_tf_idf(corpus):
+    '''
+    Given corpus, function calculates the weight of rare words across all documents in the corpus and returns a matrix of tf-idf.
+    param input: corpus
+    return: matrix of term frequencies - inverse data frequencies
+
+    '''
+    vectorizer = TfidfVectorizer()
+    c = vectorizer.fit_transform(corpus)
+
+    return c.toarray()
+
 def text_preprocessing(corpus, language):
     '''
     Given corpus and language indicator, function creates different types of representations:
@@ -237,8 +262,11 @@ def text_preprocessing(corpus, language):
     - bigram model
     - part of speech model
     - word position model
+    - term frequency model
+    - term frequency - inverse data frequency model
     param input: corpus, language indicator
-    return: bag of words model, bigram model, part of speech model, word position model
+    return: bag of words model, bigram model, part of speech model,
+            word position model, term frequency model, term frequency - inverse data frequency model
 
     '''
     language = 'Serbian' if language == 'srb' else 'English'
@@ -258,13 +286,22 @@ def text_preprocessing(corpus, language):
     word_position_model = word_position_tagging(cleaned_corpus)
     logging.debug('Word position model for {} reviews:\n {}'.format(language, word_position_model))
 
+    # Get the term frequency model from bag of words model
+    tf_model = compute_tf(bag_of_words_model)
+    logging.debug('Term frequency model for {} reviews:\n {}'.format(language, tf_model))
+
+    # Get the term frequency - inverse data frequency model
+    tf_idf_model = compute_tf_idf(cleaned_corpus)
+    logging.debug('Term frequency - inverse data frequency model for {} reviews:\n {}'.format(language, tf_idf_model))
+
     # Get the part of speech tag
+    # TODO: change when POS for Serbian corpus is delivered
     if language == 'English':
         pos_tag_model = part_of_speech_tagging(cleaned_corpus)
         logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
-        return bag_of_words_model, bigram_model, pos_tag_model, word_position_model
+        return bag_of_words_model, bigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
 
-    return bag_of_words_model, bigram_model, word_position_model
+    return bag_of_words_model, bigram_model, word_position_model, tf_model, tf_idf_model
 
 def svm_classifier(X_train, X_test, y_train, y_test):
     '''
@@ -329,9 +366,9 @@ if __name__ == '__main__':
     corpus_srb, classes_srb = get_srb_corpus()
     corpus_eng, classes_eng = get_eng_corpus()
 
-    # Get different data representations: bag of words, bigrams, part of speech tagging, word position tagging
-    bow_srb, bigram_srb, position_srb = text_preprocessing(corpus_srb, 'srb')
-    bow_eng, bigram_eng, pos_tag_eng, position_eng = text_preprocessing(corpus_eng, 'eng')
+    # Get different data representations: bag of words, bigrams, part of speech tagging, word position tagging, tf model, tf-idf model
+    bow_srb, bigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'srb')
+    bow_eng, bigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'eng')
 
     # Classification
     test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.3
@@ -342,6 +379,11 @@ if __name__ == '__main__':
     classification(bigram_srb, classes_srb, test_size)
     logging.info(' --- Serbian reviews (Word Position Model) --- \n')
     classification(position_srb, classes_srb, test_size)
+    logging.info(' --- Serbian reviews (Term Frequency Model) --- \n')
+    classification(tf_srb, classes_srb, test_size)
+    logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) --- \n')
+    classification(tf_idf_srb, classes_srb, test_size)
+
     logging.info(' --- English reviews (Bag Of Words Model) --- \n')
     classification(bow_eng, classes_eng, test_size)
     logging.info(' --- English reviews (Bigram Model) --- \n')
@@ -350,4 +392,7 @@ if __name__ == '__main__':
     classification(pos_tag_eng, classes_eng, test_size)
     logging.info(' --- English reviews (Word Position Model) --- \n')
     classification(position_eng, classes_eng, test_size)
-
+    logging.info(' --- English reviews (Term Frequency Model) --- \n')
+    classification(tf_eng, classes_eng, test_size)
+    logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) --- \n')
+    classification(tf_idf_eng, classes_eng, test_size)
