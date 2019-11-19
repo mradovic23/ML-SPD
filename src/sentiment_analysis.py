@@ -11,6 +11,7 @@ from sklearn import naive_bayes
 from sklearn import metrics
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from helper import serbian_stemmer as ss
 
 def get_parser():
     '''
@@ -63,7 +64,7 @@ def get_srb_corpus():
     return: Data Frame structure with extracted informations from corpus
 
     '''
-    path = 'SerbMR-3C.csv'
+    path = 'data/SerbMR-3C.csv'
 
     try:
         data = pd.read_csv(path, encoding='utf-8')
@@ -83,7 +84,7 @@ def get_eng_corpus():
     return: Data Frame structure with extracted informations from corpus
 
     '''
-    path = 'review_polarity/txt_sentoken'
+    path = 'data/review_polarity/txt_sentoken'
 
     corpus, classes = [], []
     for root, directories, files in os.walk(path):
@@ -120,6 +121,35 @@ def remove_punctuation(corpus):
         cleaned_text.append(c.translate(replacer))
 
     return cleaned_text
+
+def stemming(corpus, language):
+    '''
+    Given corpus and language indicator, function is doing "word normalization", ie. reducing inflection in words to their root forms
+    for all words across all documents in the corpus.
+    For Serbian movies, it is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
+    For English movies, it is done by using existing stemmer from nltk - Porter Stemmer.
+    param input: corpus, language indicator
+    return: stemmed corpus
+
+    '''
+    stemming_list = []
+    if language == 'Serbian':
+        # TODO: find the word first in the vocabulary when it is delivered
+        for document in corpus:
+            l = ss.stem_str(document)
+            stemming_list.append("".join(l))
+
+    else:
+        ps = nltk.stem.PorterStemmer()
+        for document in corpus:
+            words = nltk.word_tokenize(document)
+            l = []
+            for w in words:
+                l.append(ps.stem(w))
+                l.append(' ')
+            stemming_list.append("".join(l))
+
+    return stemming_list
 
 def generate_ngrams(corpus, n):
     '''
@@ -257,7 +287,7 @@ def compute_tf_idf(corpus):
 
 def text_preprocessing(corpus, language):
     '''
-    Given corpus and language indicator, function creates different types of representations:
+    Given corpus and language indicator, function first removes punctuation, stemms words and then creates different types of corpus representations:
     - bag of words model
     - bigram model
     - part of speech model
@@ -269,21 +299,22 @@ def text_preprocessing(corpus, language):
             word position model, term frequency model, term frequency - inverse data frequency model
 
     '''
-    language = 'Serbian' if language == 'srb' else 'English'
-
     # Remove punctuation
     cleaned_corpus = remove_punctuation(corpus)
 
+    # Stemming
+    stemmed_corpus = stemming(cleaned_corpus, language)
+
     # Get the bag of words model
-    bag_of_words_model = generate_ngrams(cleaned_corpus, 1)
+    bag_of_words_model = generate_ngrams(stemmed_corpus, 1)
     logging.debug('Bag of words for {} reviews:\n {}'.format(language, bag_of_words_model))
 
     # Get the bigram model
-    bigram_model = generate_ngrams(cleaned_corpus, 2)
+    bigram_model = generate_ngrams(stemmed_corpus, 2)
     logging.debug('Bigram model for {} reviews:\n {}'.format(language, bigram_model))
 
     # Get the word position model
-    word_position_model = word_position_tagging(cleaned_corpus)
+    word_position_model = word_position_tagging(stemmed_corpus)
     logging.debug('Word position model for {} reviews:\n {}'.format(language, word_position_model))
 
     # Get the term frequency model from bag of words model
@@ -291,13 +322,13 @@ def text_preprocessing(corpus, language):
     logging.debug('Term frequency model for {} reviews:\n {}'.format(language, tf_model))
 
     # Get the term frequency - inverse data frequency model
-    tf_idf_model = compute_tf_idf(cleaned_corpus)
+    tf_idf_model = compute_tf_idf(stemmed_corpus)
     logging.debug('Term frequency - inverse data frequency model for {} reviews:\n {}'.format(language, tf_idf_model))
 
     # Get the part of speech tag
     # TODO: change when POS for Serbian corpus is delivered
     if language == 'English':
-        pos_tag_model = part_of_speech_tagging(cleaned_corpus)
+        pos_tag_model = part_of_speech_tagging(stemmed_corpus)
         logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
         return bag_of_words_model, bigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
 
@@ -350,7 +381,6 @@ def classification(data, classes, test_size):
     score = nb_classifier(X_train, X_test, y_train, y_test)
     logging.info('NB accuracy: {}\n'.format(score))
 
-
 if __name__ == '__main__':
 
     # Set the argument parser
@@ -367,8 +397,8 @@ if __name__ == '__main__':
     corpus_eng, classes_eng = get_eng_corpus()
 
     # Get different data representations: bag of words, bigrams, part of speech tagging, word position tagging, tf model, tf-idf model
-    bow_srb, bigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'srb')
-    bow_eng, bigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'eng')
+    bow_srb, bigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
+    bow_eng, bigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
 
     # Classification
     test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.3
