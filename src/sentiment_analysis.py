@@ -153,13 +153,14 @@ def stemming(corpus, language):
 
 def generate_ngrams(corpus, n):
     '''
-    Given corpus and number n (n stands for ngram), function extracts all ngrams from all files in corpus
-    For n = 1 this function creates a bag of words model
+    Given corpus and number n (n stands for ngram), function extracts all ngrams from all files in corpus.
+    For n = 1 this function creates a bag of words model.
+    For n = 2 this function creates a bigram model.
     param input: corpus, number n
     return: vector of ngrams
 
     '''
-    vectorizer = CountVectorizer(ngram_range=(1,n))
+    vectorizer = CountVectorizer(ngram_range=(n,n), max_features=100000)
     c = vectorizer.fit_transform(corpus)
 
     return c.toarray()
@@ -179,7 +180,7 @@ def get_part_of_speech_words(corpus):
 
     return tags
 
-def create_tag_vocabulary(tags):
+def create_vocabulary(corpus):
     '''
     Given tagged word list (tuple shape (word, tag)), function creates a list of unique sorted tuples - vocabulary.
     param input: tagged word list
@@ -187,41 +188,41 @@ def create_tag_vocabulary(tags):
 
     '''
     vocabulary = []
-    for t in tags:
-        vocabulary.extend(t)
+    for c in corpus:
+        vocabulary.extend(c)
 
     vocabulary = sorted(list(set(vocabulary)))
 
     return vocabulary
 
-def create_tagging_model(tags, vocabulary):
+def create_model(corpus, vocabulary):
     '''
-    Given list of tagged words and tagged vocabulary, functions creates a vector of token counts.
+    Given corpus and vocabulary, functions creates a vector of token counts.
     param input: list of tagged words and tagged vocabulary
     return: appropriate (vector of token counts) model for ML algorithms
 
     '''
-    pos_tag = np.zeros((len(tags), len(vocabulary)))
-    for i, tag in enumerate(tags):
+    model = np.zeros((len(corpus), len(vocabulary)))
+    for i, documents in enumerate(corpus):
         document = np.zeros(len(vocabulary))
-        for t in tags[i]:
+        for c in corpus[i]:
             for j, word in enumerate(vocabulary):
-                if word == t:
+                if word == c:
                     document[j] += 1
-        pos_tag[i] = document
+        model[i] = document
 
-    return pos_tag
+    return model
 
 def part_of_speech_tagging(corpus):
     '''
-    Given corpus, function creates tagged words, a vocabulary and appropriate model for ML algorithms.
+    Given corpus, function extracts tagged words, creates a vocabulary and appropriate model for ML algorithms.
     param input: corpus
     return: appropriate model for ML algorithms
 
     '''
     tags = get_part_of_speech_words(corpus)
-    vocabulary = create_tag_vocabulary(tags)
-    pos_tag = create_tagging_model(tags, vocabulary)
+    vocabulary = create_vocabulary(tags)
+    pos_tag = create_model(tags, vocabulary)
 
     return pos_tag
 
@@ -248,14 +249,14 @@ def get_word_position(corpus):
 
 def word_position_tagging(corpus):
     '''
-    Given corpus, function creates tagged words, a vocabulary and appropriate model for ML algorithms.
+    Given corpus, function extracts all tagged words, creates a vocabulary and appropriate model for ML algorithms.
     param input: corpus
     return: appropriate model for ML algorithms
 
     '''
     tags = get_word_position(corpus)
-    vocabulary = create_tag_vocabulary(tags)
-    word_position_tag = create_tagging_model(tags, vocabulary)
+    vocabulary = create_vocabulary(tags)
+    word_position_tag = create_model(tags, vocabulary)
 
     return word_position_tag
 
@@ -295,8 +296,8 @@ def text_preprocessing(corpus, language):
     - term frequency model
     - term frequency - inverse data frequency model
     param input: corpus, language indicator
-    return: bag of words model, bigram model, part of speech model,
-            word position model, term frequency model, term frequency - inverse data frequency model
+    return: bag of words model, bigram model, part of speech model, word position model,
+            term frequency model, term frequency - inverse data frequency model
 
     '''
     # Remove punctuation
@@ -372,8 +373,7 @@ def classification(data, classes, test_size):
     return: None
 
     '''
-    X_train, X_test, y_train, y_test = model_selection.train_test_split(
-                                        data, classes, test_size=test_size)
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(data, classes, test_size=test_size)
 
     score = svm_classifier(X_train, X_test, y_train, y_test)
     logging.info('SVM accuracy: {}\n'.format(score))

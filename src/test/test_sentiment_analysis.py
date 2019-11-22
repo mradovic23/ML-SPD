@@ -51,10 +51,10 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         bigrams_eng = sa.generate_ngrams(corpus_eng, 2)
 
         # NOTE: arrays are in alphabetical order
-        expected_srb = np.array([[0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1],
-                                 [1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0]])
-        expected_eng = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-                                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1]])
+        expected_srb = np.array([[0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1],
+                                 [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0]])
+        expected_eng = np.array([[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0],
+                                 [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1]])
 
         self.assertTrue((np.array_equal(bigrams_srb, expected_srb)) and (np.array_equal(bigrams_eng, expected_eng)))
 
@@ -110,16 +110,17 @@ class TestPreprocessFunctionalities(unittest.TestCase):
 
         self.assertTrue((np.allclose(position_srb, expected_srb)) and (np.allclose(position_eng, expected_eng)))
 
-    def test_create_tag_vocabulary(self):
+    def test_create_vocabulary(self):
         # TODO: add for Serbian movies when POS tagger is delivered
         tagged_position_corpus_srb = sa.get_word_position(corpus_srb)
         tagged_position_corpus_eng = sa.get_word_position(corpus_eng)
         tagged_pos_tag_corpus_eng = sa.get_part_of_speech_words(corpus_eng)
 
-        vocabulary_position_srb = sa.create_tag_vocabulary(tagged_position_corpus_srb)
-        vocabulary_position_eng = sa.create_tag_vocabulary(tagged_position_corpus_eng)
-        vocabulary_pos_tag_eng = sa.create_tag_vocabulary(tagged_pos_tag_corpus_eng)
+        vocabulary_position_srb = sa.create_vocabulary(tagged_position_corpus_srb)
+        vocabulary_position_eng = sa.create_vocabulary(tagged_position_corpus_eng)
+        vocabulary_pos_tag_eng = sa.create_vocabulary(tagged_pos_tag_corpus_eng)
 
+        # NOTE: arrays are in alphabetical order
         expected_position_srb = [('!', 'end'), ("'", 'begin'), ("'", 'midle'), ("'Kum", 'begin'), ("'Memento", 'midle'), (',', 'end'), ('.', 'end'), ('.', 'midle'), ('Film', 'begin'), ('Oduševljen', 'end'), ('Preporučujem', 'begin'), ('Užasno', 'midle'), ('da', 'begin'), ('dopada', 'midle'),
                                  ('dosadan', 'end'), ('dug', 'end'), ('film', 'midle'), ('i', 'end'), ('je', 'midle'), ('mi', 'begin'), ('ne', 'midle'), ('nezanimljiv', 'end'), ('njime', 'end'), ('pogledaju', 'begin'), ('sam', 'end'), ('se', 'begin'), ('svima', 'begin'), ('uopšte', 'midle')]
         expected_position_eng = [('!', 'end'), ("'", 'midle'), ("'Memento", 'midle'), ("'The", 'begin'), ("'m", 'end'), (',', 'end'), ('.', 'end'), ('.', 'midle'), ('Godfather', 'midle'), ('I', 'begin'), ('I', 'end'), ('It', 'midle'), ('all', 'midle'), ('and', 'end'), ('at', 'midle'), ('boring', 'end'), ('do', 'begin'), ('everyone', 'begin'),
@@ -130,19 +131,19 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         self.assertTrue((vocabulary_position_srb == expected_position_srb) and (vocabulary_position_eng == expected_position_eng) and
                         (vocabulary_pos_tag_eng == expected_pos_tag_eng))
 
-    def test_create_tagging_model(self):
+    def test_create_model(self):
         # TODO: add for Serbian movies when POS tagger is delivered
         tagged_position_corpus_srb = sa.get_word_position(corpus_srb)
         tagged_position_corpus_eng = sa.get_word_position(corpus_eng)
         tagged_pos_tag_corpus_eng = sa.get_part_of_speech_words(corpus_eng)
 
-        vocabulary_position_srb = sa.create_tag_vocabulary(tagged_position_corpus_srb)
-        vocabulary_position_eng = sa.create_tag_vocabulary(tagged_position_corpus_eng)
-        vocabulary_pos_tag_eng = sa.create_tag_vocabulary(tagged_pos_tag_corpus_eng)
+        vocabulary_position_srb = sa.create_vocabulary(tagged_position_corpus_srb)
+        vocabulary_position_eng = sa.create_vocabulary(tagged_position_corpus_eng)
+        vocabulary_pos_tag_eng = sa.create_vocabulary(tagged_pos_tag_corpus_eng)
 
-        position_model_srb = sa.create_tagging_model(tagged_position_corpus_srb, vocabulary_position_srb)
-        position_model_eng = sa.create_tagging_model(tagged_position_corpus_eng, vocabulary_position_eng)
-        pos_tagging_model_eng = sa.create_tagging_model(tagged_pos_tag_corpus_eng, vocabulary_pos_tag_eng)
+        position_model_srb = sa.create_model(tagged_position_corpus_srb, vocabulary_position_srb)
+        position_model_eng = sa.create_model(tagged_position_corpus_eng, vocabulary_position_eng)
+        pos_tagging_model_eng = sa.create_model(tagged_pos_tag_corpus_eng, vocabulary_pos_tag_eng)
 
         # NOTE: arrays are in alphabetical order
         expected_position_srb = np.array([[1., 1., 0., 1., 0., 1., 0., 1., 1., 0., 0., 1., 0., 1., 1., 1., 0., 1., 1., 1., 1., 1., 0., 0., 0., 1., 0., 1.],
@@ -169,7 +170,6 @@ class TestPreprocessFunctionalities(unittest.TestCase):
                                 [0., 0., 0., 0., 0., 0.04761905, 0., 0., 0.04761905, 0., 0., 0.04761905, 0.04761905, 0.04761905, 0., 0.04761905, 0.04761905, 0.04761905, 0., 0.04761905, 0.04761905]])
 
         self.assertTrue((np.allclose(tf_srb, expected_srb)) and (np.allclose(tf_eng, expected_eng)))
-
 
     def test_compute_tf_idf(self):
         tf_idf_srb = sa.compute_tf_idf(corpus_srb)
