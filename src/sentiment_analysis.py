@@ -238,9 +238,9 @@ def get_word_position(corpus):
         word_number = len(words)
         list_begin = zip(words[:word_number//3], ['begin' for i in range(word_number//3)])
         l = list(list_begin)
-        list_midle = zip(words[word_number//3:2*word_number//3], ['midle' for i in range(word_number//3)])
+        list_midle = zip(words[word_number//3:2*word_number//3], ['midle' for i in range(2*word_number//3 - word_number//3)])
         l.extend(list(list_midle))
-        list_end = zip(words[2*word_number//3:], ['end' for i in range(word_number//3)])
+        list_end = zip(words[2*word_number//3:], ['end' for i in range(word_number - 2*word_number//3)])
         l.extend(list(list_end))
         tags.append(l)
 

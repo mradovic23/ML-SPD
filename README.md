@@ -3,6 +3,7 @@
 ## Project structure
 - src/sentiment_analysis.py is the main file
 - src/helper folder contains all helper functions (stemmer fo Serbian language)
+- src/test folder contains unit tests for funcionalities in sentiment_analysis.py file
 - src/data folder should contain input data
 
 ### Corpus representations
@@ -47,3 +48,4 @@
   - set the logging level e.g. "python sentiment_analysis.py -l debug" ([CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET])
   - set the percentage number for test data e.g. "python sentiment_analysis.py -t 30" ([0-100])
   - type "python sentiment_analysis.py --help" to show all argument options
+- Testing: go to src/test folder, type "python test_sentiment_analysis.py"
