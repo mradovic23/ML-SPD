@@ -35,8 +35,8 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         self.assertTrue(stemmed_corpus_eng == expected_eng)
 
     def test_generate_ngrams_unigrams(self):
-        unigrams_srb = sa.generate_ngrams(corpus_srb, 1)
-        unigrams_eng = sa.generate_ngrams(corpus_eng, 1)
+        unigrams_srb = sa.generate_ngrams(corpus_srb, (1, 1))
+        unigrams_eng = sa.generate_ngrams(corpus_eng, (1, 1))
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1],
@@ -47,8 +47,8 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         self.assertTrue((np.array_equal(unigrams_srb, expected_srb)) and (np.array_equal(unigrams_eng, expected_eng)))
 
     def test_generate_ngrams_bigrams(self):
-        bigrams_srb = sa.generate_ngrams(corpus_srb, 2)
-        bigrams_eng = sa.generate_ngrams(corpus_eng, 2)
+        bigrams_srb = sa.generate_ngrams(corpus_srb, (2, 2))
+        bigrams_eng = sa.generate_ngrams(corpus_eng, (2, 2))
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1],
@@ -57,6 +57,18 @@ class TestPreprocessFunctionalities(unittest.TestCase):
                                  [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1]])
 
         self.assertTrue((np.array_equal(bigrams_srb, expected_srb)) and (np.array_equal(bigrams_eng, expected_eng)))
+
+    def test_generate_ngrams_bigrams_plus_unigrams(self):
+        bigrams_unigram_srb = sa.generate_ngrams(corpus_srb, (1, 2))
+        bigrams_unigram_eng = sa.generate_ngrams(corpus_eng, (1, 2))
+
+        # NOTE: arrays are in alphabetical order
+        expected_srb = np.array([[0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1],
+                                 [1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0]])
+        expected_eng = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+                                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1]])
+
+        self.assertTrue((np.array_equal(bigrams_unigram_srb, expected_srb)) and (np.array_equal(bigrams_unigram_eng, expected_eng)))
 
     def test_get_part_of_speech_words(self):
         # TODO: add for Serbian movies when POS tagger is delivered
@@ -157,8 +169,8 @@ class TestPreprocessFunctionalities(unittest.TestCase):
                         (np.allclose(pos_tagging_model_eng, expected_pos_tag_eng)))
 
     def test_compute_tf(self):
-        bow_srb = sa.generate_ngrams(corpus_srb, 1)
-        bow_eng = sa.generate_ngrams(corpus_eng, 1)
+        bow_srb = sa.generate_ngrams(corpus_srb, (1, 1))
+        bow_eng = sa.generate_ngrams(corpus_eng, (1, 1))
 
         tf_srb = sa.compute_tf(bow_srb)
         tf_eng = sa.compute_tf(bow_eng)

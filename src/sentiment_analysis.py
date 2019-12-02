@@ -153,14 +153,15 @@ def stemming(corpus, language):
 
 def generate_ngrams(corpus, n):
     '''
-    Given corpus and number n (n stands for ngram), function extracts all ngrams from all files in corpus.
-    For n = 1 this function creates a bag of words model.
-    For n = 2 this function creates a bigram model.
+    Given corpus and number n, function extracts all ngrams from all files in corpus.
+    For n = (1, 1) this function creates a bag of words model.
+    For n = (2, 2) this function creates a bigram model.
+    For n = (1, 2) this function creates a bigram + unigram model.
     param input: corpus, number n
     return: vector of ngrams
 
     '''
-    vectorizer = CountVectorizer(ngram_range=(n,n), max_features=100000)
+    vectorizer = CountVectorizer(ngram_range=n, max_features=100000)
     c = vectorizer.fit_transform(corpus)
 
     return c.toarray()
@@ -291,12 +292,13 @@ def text_preprocessing(corpus, language):
     Given corpus and language indicator, function first removes punctuation, stemms words and then creates different types of corpus representations:
     - bag of words model
     - bigram model
+    - bigram + unigram model
     - part of speech model
     - word position model
     - term frequency model
     - term frequency - inverse data frequency model
     param input: corpus, language indicator
-    return: bag of words model, bigram model, part of speech model, word position model,
+    return: bag of words model, bigram model, bigram + unigram model, part of speech model, word position model,
             term frequency model, term frequency - inverse data frequency model
 
     '''
@@ -307,12 +309,16 @@ def text_preprocessing(corpus, language):
     stemmed_corpus = stemming(cleaned_corpus, language)
 
     # Get the bag of words model
-    bag_of_words_model = generate_ngrams(stemmed_corpus, 1)
+    bag_of_words_model = generate_ngrams(stemmed_corpus, (1, 1))
     logging.debug('Bag of words for {} reviews:\n {}'.format(language, bag_of_words_model))
 
     # Get the bigram model
-    bigram_model = generate_ngrams(stemmed_corpus, 2)
+    bigram_model = generate_ngrams(stemmed_corpus, (2, 2))
     logging.debug('Bigram model for {} reviews:\n {}'.format(language, bigram_model))
+
+    # Get the bigram + unigram model
+    bigram_unigram_model = generate_ngrams(stemmed_corpus, (1, 2))
+    logging.debug('Bigram + unigram model for {} reviews:\n {}'.format(language, bigram_unigram_model))
 
     # Get the word position model
     word_position_model = word_position_tagging(stemmed_corpus)
@@ -331,9 +337,9 @@ def text_preprocessing(corpus, language):
     if language == 'English':
         pos_tag_model = part_of_speech_tagging(stemmed_corpus)
         logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
-        return bag_of_words_model, bigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
+        return bag_of_words_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
 
-    return bag_of_words_model, bigram_model, word_position_model, tf_model, tf_idf_model
+    return bag_of_words_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
 
 def svm_classifier(X_train, X_test, y_train, y_test):
     '''
@@ -396,9 +402,10 @@ if __name__ == '__main__':
     corpus_srb, classes_srb = get_srb_corpus()
     corpus_eng, classes_eng = get_eng_corpus()
 
-    # Get different data representations: bag of words, bigrams, part of speech tagging, word position tagging, tf model, tf-idf model
-    bow_srb, bigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
-    bow_eng, bigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
+    # Get different data representations: bag of words, bigram model, bigram + unigram model,
+    # part of speech tagging, word position tagging, tf model, tf-idf model
+    bow_srb, bigram_srb, bigram_unigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
+    bow_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
 
     # Classification
     test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.3
@@ -407,6 +414,8 @@ if __name__ == '__main__':
     classification(bow_srb, classes_srb, test_size)
     logging.info(' --- Serbian reviews (Bigram Model) --- \n')
     classification(bigram_srb, classes_srb, test_size)
+    logging.info(' --- Serbian reviews (Bigram + Unigram Model) --- \n')
+    classification(bigram_unigram_srb, classes_srb, test_size)
     logging.info(' --- Serbian reviews (Word Position Model) --- \n')
     classification(position_srb, classes_srb, test_size)
     logging.info(' --- Serbian reviews (Term Frequency Model) --- \n')
@@ -418,6 +427,8 @@ if __name__ == '__main__':
     classification(bow_eng, classes_eng, test_size)
     logging.info(' --- English reviews (Bigram Model) --- \n')
     classification(bigram_eng, classes_eng, test_size)
+    logging.info(' --- English reviews (Bigram + Unigram Model) --- \n')
+    classification(bigram_unigram_eng, classes_eng, test_size)
     logging.info(' --- English reviews (Part Of Speech Model) --- \n')
     classification(pos_tag_eng, classes_eng, test_size)
     logging.info(' --- English reviews (Word Position Model) --- \n')

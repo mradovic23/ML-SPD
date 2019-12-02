@@ -16,6 +16,7 @@
 - Corpuses are represented in different styles:
   - Bag of words (BOW) model
   - Bigram model
+  - Bigram + unigram model
   - Part of speech (POS) model
   - Word position in text model
   - Term frequency model (for unigrams)
@@ -45,7 +46,7 @@
 ## Usage:
 - Download the corpuses (unzip if necessary) and locate them in src/data folder
 - Run the code by typing: "python sentiment_analysis.py"
-  - set the logging level e.g. "python sentiment_analysis.py -l debug" ([CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET])
+  - set the logging level e.g. "python sentiment_analysis.py -l debug" ([critical, error, warning, info, debug])
   - set the percentage number for test data e.g. "python sentiment_analysis.py -t 30" ([0-100])
   - type "python sentiment_analysis.py --help" to show all argument options
 - Testing: go to src/test folder, type "python test_sentiment_analysis.py"
