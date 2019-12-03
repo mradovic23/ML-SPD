@@ -75,7 +75,7 @@ def has_cyrillic(text):
 
 def lower(corpus):
     '''
-    Given corpus, function sets all uppercase letters to lowercase.
+    Given corpus, function sets all uppercase letters to lowercase letters.
     param input: corpus
     return: corpus with lowercase letters
 
@@ -319,17 +319,32 @@ def word_position_tagging(corpus):
 
 def compute_tf(corpus):
     '''
-    Given bow corpus model, function calculates frequency of every word in all documents in the corpus and returns a matrix of tf.
+    Given corpus, function calculates frequency of every word in all documents in the corpus and returns a matrix of tf.
     param input: corpus
     return: matrix of term frequencies
 
     '''
-    tf_matrix = np.zeros(corpus.shape)
-    for i in range(len(corpus)):
-        for j in range(len(corpus[i])):
-            tf_matrix[i][j] = corpus[i][j] / len(corpus[i])
+    # Create vocabulary of the entire corpus
+    vectorizer = CountVectorizer()
+    c = vectorizer.fit_transform(corpus)
+    vocabulary = vectorizer.get_feature_names()
 
-    return tf_matrix
+    model = np.zeros((len(corpus), len(vocabulary)))
+    for i, c in enumerate(corpus):
+        # Extract words
+        words = nltk.word_tokenize(c)
+        document = np.zeros(len(vocabulary))
+        # Create vocabulary of the specific document
+        doc = vectorizer.fit_transform([c])
+        doc_vocabulary = vectorizer.get_feature_names()
+        doc_vocabulary_length = len(doc_vocabulary)
+        for w in words:
+            index = vocabulary.index(w) if w in vocabulary else -1
+            if index != -1:
+                document[index] += 1 / doc_vocabulary_length
+        model[i] = document
+
+    return model
 
 def compute_tf_idf(corpus):
     '''
@@ -382,7 +397,7 @@ def text_preprocessing(corpus, language):
     logging.debug('Word position model for {} reviews:\n {}'.format(language, word_position_model))
 
     # Get the term frequency model from bag of words model
-    tf_model = compute_tf(bag_of_words_model)
+    tf_model = compute_tf(cleaned_corpus)
     logging.debug('Term frequency model for {} reviews:\n {}'.format(language, tf_model))
 
     # Get the term frequency - inverse data frequency model
