@@ -11,8 +11,18 @@ corpus_srb = ["Film 'Kum' mi se uopšte ne dopada. Užasno je dosadan, dug i nez
               "Preporučujem svima da pogledaju film 'Memento'. Oduševljen sam njime."]
 corpus_eng = ["I don't like movie 'The Godfather' at all. It is terribly boring, long and uninteresting!",
               "I recommend everyone to watch the movie 'Memento'. I'm thrilled with it."]
+corpus_srb_cyrilic = ["Филм 'Кум' ми се уопште не допада. Ужасно је досадан, дуг и незанимљив!",
+                      "Препоручујем свима да погледају филм 'Мементо'. Одушљевен сам њиме."]
 
 class TestPreprocessFunctionalities(unittest.TestCase):
+
+    def test_convert_to_latin(self):
+        converted_corpus_srb = sa.convert_to_latin(corpus_srb_cyrilic)
+
+        expected_srb = ["film 'kum' mi se uopsxte ne dopada. uzxasno je dosadan, dug i nezanimljiv!",
+                        "preporucxujem svima da pogledaju film 'memento'. odusxljeven sam njime."]
+
+        self.assertTrue(converted_corpus_srb == expected_srb)
 
     def test_remove_punctuation(self):
         cleaned_corpus_srb = sa.remove_punctuation(corpus_srb)
@@ -25,9 +35,9 @@ class TestPreprocessFunctionalities(unittest.TestCase):
 
         self.assertTrue((cleaned_corpus_srb == expected_srb) and (cleaned_corpus_eng == expected_eng))
 
-    def test_stemming(self):
+    def test_lemmatization_and_stemming(self):
         # TODO: add for Serbian movies when stemmer works fine
-        stemmed_corpus_eng = sa.stemming(corpus_eng, 'English')
+        stemmed_corpus_eng = sa.lemmatization_and_stemming(corpus_eng, 'English')
 
         expected_eng = ["I do n't like movi 'the godfath ' at all . It is terribl bore , long and uninterest ! ",
                         "I recommend everyon to watch the movi 'memento ' . I 'm thrill with it . "]

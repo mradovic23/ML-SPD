@@ -1,10 +1,14 @@
+# coding=UTF-8
+
 import os
 import logging
 import argparse
 import nltk
 import string
+import re
 import pandas as pd
 import numpy as np
+import cyrtranslit
 from sklearn import model_selection
 from sklearn import svm
 from sklearn import naive_bayes
@@ -55,6 +59,53 @@ def nltk_dependencies():
         nltk.data.find('tokenizers/averaged_perceptron_tagger')
     except LookupError:
         nltk.download('averaged_perceptron_tagger')
+    try:
+        nltk.data.find('tokenizers/wordnet')
+    except LookupError:
+        nltk.download('wordnet')
+
+def has_cyrillic(text):
+    '''
+    Given text, function checks if the text has cyrillic font.
+    param input: text
+    return: true if text contains cyrillic letters
+
+    '''
+    return bool(re.search('[а-яА-Я]', text))
+
+def lower(corpus):
+    '''
+    Given corpus, function sets all uppercase letters to lowercase.
+    param input: corpus
+    return: corpus with lowercase letters
+
+    '''
+    lower_list = []
+    for c in corpus:
+        lower_list.append(c.lower())
+
+    return lower_list
+
+def convert_to_latin(corpus):
+    '''
+    Given text, function converts cyrillic font to latin and replaces {š, č, ć, đ, ž} with {sx, cx, cy, dx, zx}.
+    param input: corpus
+    return: latin corpus cleaned from {š, č, ć, đ, ž} letters
+    '''
+
+    latin_list = []
+    for c in corpus:
+        if has_cyrillic(c):
+            c = cyrtranslit.to_latin(c)
+        c = c.lower()
+        c = c.replace("š", "sx")
+        c = c.replace("č", "cx")
+        c = c.replace("ć", "cy")
+        c = c.replace("đ", "dx")
+        c = c.replace("ž", "zx")
+        latin_list.append(c)
+
+    return latin_list
 
 def get_srb_corpus():
     '''
@@ -73,6 +124,7 @@ def get_srb_corpus():
         sys.exit()
 
     data.columns = ['Text', 'Rating']
+    data.Text = convert_to_latin(data.Text)
 
     return data.Text, data.Rating
 
@@ -105,6 +157,7 @@ def get_eng_corpus():
 
     data = {'Text': corpus, 'Rating': classes}
     data = pd.DataFrame(data)
+    data.Text = lower(data.Text)
 
     return data.Text, data.Rating
 
@@ -122,14 +175,16 @@ def remove_punctuation(corpus):
 
     return cleaned_text
 
-def stemming(corpus, language):
+def lemmatization_and_stemming(corpus, language):
     '''
     Given corpus and language indicator, function is doing "word normalization", ie. reducing inflection in words to their root forms
-    for all words across all documents in the corpus.
-    For Serbian movies, it is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
-    For English movies, it is done by using existing stemmer from nltk - Porter Stemmer.
+    for all words across all documents in the corpus. First is lemmatization applied (replacing a word with his dictionary form) and
+    then stemming (replacing a word with his "root" form).
+    For Serbian movies, stemming is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
+    For English movies, lemmatization is done by using WordNetLemmatizer from nltk.
+    Stemming is done by using existing stemmer from nltk - Porter Stemmer.
     param input: corpus, language indicator
-    return: stemmed corpus
+    return: lemmatizated and stemmed corpus
 
     '''
     stemming_list = []
@@ -140,12 +195,13 @@ def stemming(corpus, language):
             stemming_list.append("".join(l))
 
     else:
+        wl = nltk.stem.WordNetLemmatizer()
         ps = nltk.stem.PorterStemmer()
         for document in corpus:
             words = nltk.word_tokenize(document)
             l = []
             for w in words:
-                l.append(ps.stem(w))
+                l.append(ps.stem(wl.lemmatize(w)))
                 l.append(' ')
             stemming_list.append("".join(l))
 
@@ -289,7 +345,8 @@ def compute_tf_idf(corpus):
 
 def text_preprocessing(corpus, language):
     '''
-    Given corpus and language indicator, function first removes punctuation, stemms words and then creates different types of corpus representations:
+    Given corpus and language indicator, function first removes punctuation, lemmatizates/stemms words
+    and then creates different types of corpus representations:
     - bag of words model
     - bigram model
     - bigram + unigram model
@@ -305,23 +362,23 @@ def text_preprocessing(corpus, language):
     # Remove punctuation
     cleaned_corpus = remove_punctuation(corpus)
 
-    # Stemming
-    stemmed_corpus = stemming(cleaned_corpus, language)
+    # Lemmatization and stemming
+    cleaned_corpus = lemmatization_and_stemming(cleaned_corpus, language)
 
     # Get the bag of words model
-    bag_of_words_model = generate_ngrams(stemmed_corpus, (1, 1))
+    bag_of_words_model = generate_ngrams(cleaned_corpus, (1, 1))
     logging.debug('Bag of words for {} reviews:\n {}'.format(language, bag_of_words_model))
 
     # Get the bigram model
-    bigram_model = generate_ngrams(stemmed_corpus, (2, 2))
+    bigram_model = generate_ngrams(cleaned_corpus, (2, 2))
     logging.debug('Bigram model for {} reviews:\n {}'.format(language, bigram_model))
 
     # Get the bigram + unigram model
-    bigram_unigram_model = generate_ngrams(stemmed_corpus, (1, 2))
+    bigram_unigram_model = generate_ngrams(cleaned_corpus, (1, 2))
     logging.debug('Bigram + unigram model for {} reviews:\n {}'.format(language, bigram_unigram_model))
 
     # Get the word position model
-    word_position_model = word_position_tagging(stemmed_corpus)
+    word_position_model = word_position_tagging(cleaned_corpus)
     logging.debug('Word position model for {} reviews:\n {}'.format(language, word_position_model))
 
     # Get the term frequency model from bag of words model
@@ -329,13 +386,13 @@ def text_preprocessing(corpus, language):
     logging.debug('Term frequency model for {} reviews:\n {}'.format(language, tf_model))
 
     # Get the term frequency - inverse data frequency model
-    tf_idf_model = compute_tf_idf(stemmed_corpus)
+    tf_idf_model = compute_tf_idf(cleaned_corpus)
     logging.debug('Term frequency - inverse data frequency model for {} reviews:\n {}'.format(language, tf_idf_model))
 
     # Get the part of speech tag
     # TODO: change when POS for Serbian corpus is delivered
     if language == 'English':
-        pos_tag_model = part_of_speech_tagging(stemmed_corpus)
+        pos_tag_model = part_of_speech_tagging(cleaned_corpus)
         logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
         return bag_of_words_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
 
