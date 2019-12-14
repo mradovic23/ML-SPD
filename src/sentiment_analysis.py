@@ -9,12 +9,15 @@ import re
 import pandas as pd
 import numpy as np
 import cyrtranslit
+import gc
+from statistics import mean
 from sklearn import model_selection
 from sklearn import svm
 from sklearn import naive_bayes
 from sklearn import metrics
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import cross_val_score
 from helper import serbian_stemmer as ss
 
 def get_parser():
@@ -29,6 +32,8 @@ def get_parser():
                         help='Set logging level [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]')
     parser.add_argument('-t', '--test_percentage', required=False,
                         help='Set the percentage for test data [0-100]')
+    parser.add_argument('-c', '--cross_validation', required=False,
+                        help='Add cross validation', action='store_true')
     arguments = vars(parser.parse_args())
 
     return arguments
@@ -413,9 +418,23 @@ def text_preprocessing(corpus, language):
 
     return bag_of_words_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
 
-def svm_classifier(X_train, X_test, y_train, y_test):
+def cross_validation(model, data, classes):
+    '''
+    Given model and dataset (data w/ matching class), function is doing 10-cross validation
+    in order to predict how well the model will be trained on random dataset division.
+    param input: model and dataset
+    return: prediction of how well the model will be trained
+
+    '''
+    scores = cross_val_score(model, data, classes, cv=10)
+    logging.debug('Cross-validated scores: {}\n'.format(scores))
+
+    return scores
+
+def svm_classifier(data, classes, X_train, X_test, y_train, y_test):
     '''
     Given dataset for training and testing, functions creates a Support Vector Machine classifier,
+    calculates the average of expected modeling accuracy using 10-cross validation,
     trains the model using the training set, predicts the response for the test dataset
     and returns the score between predicted and test dataset.
     param input: dataset for training and testing
@@ -423,14 +442,19 @@ def svm_classifier(X_train, X_test, y_train, y_test):
 
     '''
     clf = svm.SVC(kernel='linear') # Linear Kernel
+    if args['cross_validation'] == True:
+        score = cross_validation(clf, data, classes)
+        logging.info('Expected SVM accuracy: {}\n'.format(mean(score)))
+
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
 
     return metrics.accuracy_score(y_test, y_pred)
 
-def nb_classifier(X_train, X_test, y_train, y_test):
+def nb_classifier(data, classes, X_train, X_test, y_train, y_test):
     '''
     Given dataset for training and testing, functions creates a Naive Bayes classifier,
+    calculates the average of expected modeling accuracy using 10-cross validation,
     trains the model using the training set, predicts the response for the test dataset
     and returns the score between predicted and test dataset.
     param input: dataset for training and testing
@@ -438,6 +462,10 @@ def nb_classifier(X_train, X_test, y_train, y_test):
 
     '''
     clf = naive_bayes.MultinomialNB()
+    if args['cross_validation'] == True:
+        score = cross_validation(clf, data, classes)
+        logging.info('Expected NB accuracy: {}\n'.format(mean(score)))
+
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
 
@@ -453,11 +481,13 @@ def classification(data, classes, test_size):
     '''
     X_train, X_test, y_train, y_test = model_selection.train_test_split(data, classes, test_size=test_size)
 
-    score = svm_classifier(X_train, X_test, y_train, y_test)
+    score = svm_classifier(data, classes, X_train, X_test, y_train, y_test)
     logging.info('SVM accuracy: {}\n'.format(score))
 
-    score = nb_classifier(X_train, X_test, y_train, y_test)
+    score = nb_classifier(data, classes, X_train, X_test, y_train, y_test)
     logging.info('NB accuracy: {}\n'.format(score))
+
+    gc.collect()
 
 if __name__ == '__main__':
 

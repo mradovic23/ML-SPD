@@ -30,6 +30,7 @@
 - All models are trained and tested using two algorithms:
   - SVM (Support Vector Machine) algorithm
   - NB (Naive Bayes) algorithm
+- Before training, 10-cross validation is implemented to estimate the fitting model and ML algorithm
 
 ## Dependencies:
 - Python 3.7.4 (64 bit) or above
@@ -42,11 +43,13 @@
   - numpy
   - string
   - sklearn
+  - statistics
 
 ## Usage:
 - Download the corpuses (unzip if necessary) and locate them in src/data folder
 - Run the code by typing: "python sentiment_analysis.py"
   - set the logging level e.g. "python sentiment_analysis.py -l debug" ([critical, error, warning, info, debug])
   - set the percentage number for test data e.g. "python sentiment_analysis.py -t 30" ([0-100])
+  - set the option for 10-cross validation e.g. "python sentiment_analysis.py -c"
   - type "python sentiment_analysis.py --help" to show all argument options
 - Testing: go to src/test folder, type "python test_sentiment_analysis.py"
