@@ -35,6 +35,17 @@ class TestPreprocessFunctionalities(unittest.TestCase):
 
         self.assertTrue((cleaned_corpus_srb == expected_srb) and (cleaned_corpus_eng == expected_eng))
 
+    def test_remove_stopwords(self):
+        cleaned_corpus_srb = sa.remove_stopwords(corpus_srb, 'Serbian')
+        cleaned_corpus_eng = sa.remove_stopwords(corpus_eng, 'English')
+
+        expected_srb = ["Film 'Kum' uopšte dopada. Užasno dosadan, nezanimljiv!",
+                        "Preporučujem pogledaju film 'Memento'. Oduševljen njime."]
+        expected_eng = ["I like movie 'The Godfather' all. It terribly boring, long uninteresting!",
+                        "I recommend everyone watch movie 'Memento'. I'm thrilled it."]
+
+        self.assertTrue((cleaned_corpus_srb == expected_srb) and (cleaned_corpus_eng == expected_eng))
+
     def test_lemmatization_and_stemming(self):
         # TODO: add for Serbian movies when stemmer works fine
         stemmed_corpus_eng = sa.lemmatization_and_stemming(corpus_eng, 'English')

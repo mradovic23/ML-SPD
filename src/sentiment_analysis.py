@@ -19,6 +19,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import cross_val_score
 from helper import serbian_stemmer as ss
+from helper import serbian_stopwords as ssw
 
 def get_parser():
     '''
@@ -38,7 +39,7 @@ def get_parser():
 
     return arguments
 
-def set_loging_level(args):
+def set_logging_level(args):
     '''
     Given argument parser, function sets the logging level chosen from command line.
     param input: argument parser
@@ -68,6 +69,10 @@ def nltk_dependencies():
         nltk.data.find('tokenizers/wordnet')
     except LookupError:
         nltk.download('wordnet')
+    try:
+        nltk.data.find('tokenizers/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
 
 def has_cyrillic(text):
     '''
@@ -179,6 +184,36 @@ def remove_punctuation(corpus):
         cleaned_text.append(c.translate(replacer))
 
     return cleaned_text
+
+def remove_stopwords(corpus, language):
+    '''
+    Given corpus, function removes stopwords in all corpus documents for the selected language.
+    param input: corpus, language
+    return: corpus w/o stopwords
+
+    '''
+    if language == 'Serbian':
+        stopwords = ssw.get_list_of_stopwords()
+    else:
+        stopwords = nltk.corpus.stopwords.words('english')
+
+    cleaned_text = []
+    for c in corpus:
+        cleaned_text.append(' '.join(word for word in c.split() if word not in stopwords))
+
+    return cleaned_text
+
+def clean_coprus(corpus, language):
+    '''
+    Given corpus, function removes punctuation and stopwords in all corpus documents for the selected language.
+    param input: corpus, language
+    return: corpus w/o punctuation
+
+    '''
+    no_punctuation = remove_punctuation(corpus)
+    cleaned_corpus = remove_stopwords(no_punctuation, language)
+
+    return cleaned_corpus
 
 def lemmatization_and_stemming(corpus, language):
     '''
@@ -365,8 +400,8 @@ def compute_tf_idf(corpus):
 
 def text_preprocessing(corpus, language):
     '''
-    Given corpus and language indicator, function first removes punctuation, lemmatizates/stemms words
-    and then creates different types of corpus representations:
+    Given corpus and language indicator, function first removes punctuation and stopwords,
+    lemmatizates/stemms words and then creates different types of corpus representations:
     - bag of words model
     - bigram model
     - bigram + unigram model
@@ -379,8 +414,8 @@ def text_preprocessing(corpus, language):
             term frequency model, term frequency - inverse data frequency model
 
     '''
-    # Remove punctuation
-    cleaned_corpus = remove_punctuation(corpus)
+    # Remove punctuation and stopwords
+    cleaned_corpus = clean_coprus(corpus, language)
 
     # Lemmatization and stemming
     cleaned_corpus = lemmatization_and_stemming(cleaned_corpus, language)
@@ -495,7 +530,7 @@ if __name__ == '__main__':
     args = get_parser()
 
     # Set logging level
-    set_loging_level(args)
+    set_logging_level(args)
 
     # Install nltk dependencies
     nltk_dependencies()

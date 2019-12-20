@@ -2,7 +2,7 @@
 
 ## Project structure
 - src/sentiment_analysis.py is the main file
-- src/helper folder contains all helper functions (stemmer fo Serbian language)
+- src/helper folder contains all helper functions (stemmer and stopwords for Serbian language)
 - src/test folder contains unit tests for funcionalities in sentiment_analysis.py file
 - src/data folder should contain input data
 
@@ -23,7 +23,7 @@
   - Term frequency - inverse data frequency model (for unigrams)
 
 - Additional:
-  - Corpuses are cleaned from punctuation
+  - Corpuses are cleaned from punctuation and stopwords
   - Words are reduced to their root form (stemming)
 
 ### Machine learning techniques
