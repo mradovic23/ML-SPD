@@ -30,6 +30,7 @@
 - All models are trained and tested using two algorithms:
   - SVM (Support Vector Machine) algorithm
   - NB (Naive Bayes) algorithm
+  - MLP (Multi Layer Perceptron)
 - Before training, 10-cross validation is implemented to estimate the fitting model and ML algorithm
 
 ## Dependencies:

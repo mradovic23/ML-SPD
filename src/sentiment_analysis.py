@@ -14,6 +14,7 @@ from statistics import mean
 from sklearn import model_selection
 from sklearn import svm
 from sklearn import naive_bayes
+from sklearn import neural_network
 from sklearn import metrics
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -506,6 +507,26 @@ def nb_classifier(data, classes, X_train, X_test, y_train, y_test):
 
     return metrics.accuracy_score(y_test, y_pred)
 
+def mlp_classifier(data, classes, X_train, X_test, y_train, y_test):
+    '''
+    Given dataset for training and testing, functions creates a Multi Layer Perceptron classifier,
+    calculates the average of expected modeling accuracy using 10-cross validation,
+    trains the model using the training set, predicts the response for the test dataset
+    and returns the score between predicted and test dataset.
+    param input: dataset for training and testing
+    return: score between predicted and test dataset
+
+    '''
+    clf = neural_network.MLPClassifier()
+    if args['cross_validation'] == True:
+        score = cross_validation(clf, data, classes)
+        logging.info('Expected MLP accuracy: {}\n'.format(mean(score)))
+
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+
+    return metrics.accuracy_score(y_test, y_pred)
+
 def classification(data, classes, test_size):
     '''
     Given data, classes and size parameter, function splits the data in groups for training and testing (size for test group is test_size).
@@ -521,6 +542,9 @@ def classification(data, classes, test_size):
 
     score = nb_classifier(data, classes, X_train, X_test, y_train, y_test)
     logging.info('NB accuracy: {}\n'.format(score))
+
+    score = mlp_classifier(data, classes, X_train, X_test, y_train, y_test)
+    logging.info('MLP accuracy: {}\n'.format(score))
 
     gc.collect()
 
