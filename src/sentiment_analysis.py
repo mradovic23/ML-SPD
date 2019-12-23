@@ -16,6 +16,7 @@ from sklearn import svm
 from sklearn import naive_bayes
 from sklearn import neural_network
 from sklearn import metrics
+from sklearn import preprocessing
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import cross_val_score
@@ -172,7 +173,7 @@ def get_eng_corpus():
 
     return data.Text, data.Rating
 
-def remove_punctuation(corpus):
+def remove_punctuation(corpus, language):
     '''
     Given corpus, function removes punctuation in all corpus documents.
     param input: corpus
@@ -182,7 +183,11 @@ def remove_punctuation(corpus):
     cleaned_text = []
     replacer = str.maketrans(dict.fromkeys(string.punctuation))
     for c in corpus:
-        cleaned_text.append(c.translate(replacer))
+        text = c.translate(replacer)
+        # Serbian language needs extra cleaning
+        if language == 'Serbian':
+            text = re.sub(r'[^\w\s]', '', text)
+        cleaned_text.append(text)
 
     return cleaned_text
 
@@ -211,7 +216,7 @@ def clean_coprus(corpus, language):
     return: corpus w/o punctuation
 
     '''
-    no_punctuation = remove_punctuation(corpus)
+    no_punctuation = remove_punctuation(corpus, language)
     cleaned_corpus = remove_stopwords(no_punctuation, language)
 
     return cleaned_corpus
@@ -454,6 +459,19 @@ def text_preprocessing(corpus, language):
 
     return bag_of_words_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
 
+def scaling(X_train, X_test):
+    '''
+    Given training and test dataset, function scales datasets in range [0, 1].
+    param input: training and test dataset
+    return: scaled training and test dataset
+
+    '''
+    scaler = preprocessing.MinMaxScaler().fit(X_train)
+    X_train = scaler.transform(X_train)
+    X_test = scaler.transform(X_test)
+
+    return X_train, X_test
+
 def cross_validation(model, data, classes):
     '''
     Given model and dataset (data w/ matching class), function is doing 10-cross validation
@@ -530,12 +548,15 @@ def mlp_classifier(data, classes, X_train, X_test, y_train, y_test):
 def classification(data, classes, test_size):
     '''
     Given data, classes and size parameter, function splits the data in groups for training and testing (size for test group is test_size).
-    Afterwards, function trains the model data using SVM and NB algorithms and calculates the accuracy between predicted and test data.
+    Afterwards, function scales the training and test dataset, trains the model data using SVM and NB algorithms
+    and calculates the accuracy between predicted and test data.
     param input: data, classes and size parameter
     return: None
 
     '''
     X_train, X_test, y_train, y_test = model_selection.train_test_split(data, classes, test_size=test_size)
+
+    X_train, X_test = scaling(X_train, X_test)
 
     score = svm_classifier(data, classes, X_train, X_test, y_train, y_test)
     logging.info('SVM accuracy: {}\n'.format(score))

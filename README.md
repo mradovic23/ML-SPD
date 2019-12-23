@@ -31,7 +31,9 @@
   - SVM (Support Vector Machine) algorithm
   - NB (Naive Bayes) algorithm
   - MLP (Multi Layer Perceptron)
-- Before training, 10-cross validation is implemented to estimate the fitting model and ML algorithm
+- Before training:
+  - Training and test dataset are scaled to range [0, 1]
+  - 10-cross validation is implemented to estimate the fitting model and ML algorithm
 
 ## Dependencies:
 - Python 3.7.4 (64 bit) or above
@@ -45,6 +47,8 @@
   - string
   - sklearn
   - statistics
+  - cyrtranslit
+  - gc
 
 ## Usage:
 - Download the corpuses (unzip if necessary) and locate them in src/data folder

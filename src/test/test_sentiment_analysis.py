@@ -25,8 +25,8 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         self.assertTrue(converted_corpus_srb == expected_srb)
 
     def test_remove_punctuation(self):
-        cleaned_corpus_srb = sa.remove_punctuation(corpus_srb)
-        cleaned_corpus_eng = sa.remove_punctuation(corpus_eng)
+        cleaned_corpus_srb = sa.remove_punctuation(corpus_srb, 'Serbian')
+        cleaned_corpus_eng = sa.remove_punctuation(corpus_eng, 'English')
 
         expected_srb = ["Film Kum mi se uopšte ne dopada Užasno je dosadan dug i nezanimljiv",
                         "Preporučujem svima da pogledaju film Memento Oduševljen sam njime"]
