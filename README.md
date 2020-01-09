@@ -33,7 +33,9 @@
   - MLP (Multi Layer Perceptron)
 - Before training:
   - Training and test dataset are scaled to range [0, 1]
-  - 10-cross validation is implemented to estimate the fitting model and ML algorithm
+  - 10-cross validation is implemented to estimate the fitting model and ML algorithm [optional]
+  - Grid search option is implemented to find the best hyperparameters for every model
+    ( + autofitting with best hyperparameters) [optional]
 
 ## Dependencies:
 - Python 3.7.4 (64 bit) or above
@@ -56,5 +58,6 @@
   - set the logging level e.g. "python sentiment_analysis.py -l debug" ([critical, error, warning, info, debug])
   - set the percentage number for test data e.g. "python sentiment_analysis.py -t 30" ([0-100])
   - set the option for 10-cross validation e.g. "python sentiment_analysis.py -c"
+  - set the option for grid search e.g. "python sentiment_analysis.py -g"
   - type "python sentiment_analysis.py --help" to show all argument options
 - Testing: go to src/test folder, type "python test_sentiment_analysis.py"

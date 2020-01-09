@@ -19,7 +19,6 @@ from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_val_score
 from helper import serbian_stemmer as ss
 from helper import serbian_stopwords as ssw
 
@@ -37,6 +36,8 @@ def get_parser():
                         help='Set the percentage for test data [0-100]')
     parser.add_argument('-c', '--cross_validation', required=False,
                         help='Add cross validation', action='store_true')
+    parser.add_argument('-g', '--grid_search', required=False,
+                        help='Add grid search for hyperparameter tuning', action='store_true')
     arguments = vars(parser.parse_args())
 
     return arguments
@@ -480,92 +481,218 @@ def cross_validation(model, data, classes):
     return: prediction of how well the model will be trained
 
     '''
-    scores = cross_val_score(model, data, classes, cv=10)
+    scores = model_selection.cross_val_score(model, data, classes, cv=10)
     logging.debug('Cross-validated scores: {}\n'.format(scores))
 
     return scores
 
-def svm_classifier(data, classes, X_train, X_test, y_train, y_test):
+def get_best_svm_hyperparameters(model_id):
     '''
-    Given dataset for training and testing, functions creates a Support Vector Machine classifier,
-    calculates the average of expected modeling accuracy using 10-cross validation,
-    trains the model using the training set, predicts the response for the test dataset
-    and returns the score between predicted and test dataset.
-    param input: dataset for training and testing
+    Given model id, function returns the best grid parameters for SVM classification.
+    param input: model id
+    return: best SVM hyperparameters for given model
+
+    '''
+    switcher = {
+        'bow_srb': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
+        'bigram_srb': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_unigram_srb': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'position_srb': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_srb': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'tf_idf_srb': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'bigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'bigram_unigram_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'pos_tag_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'position_eng': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'tf_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'tf_idf_eng': {'C': 1, 'gamma': 1, 'kernel': 'linear'}
+    }
+
+    return switcher.get(model_id, "[SVM] Invalid model id\n")
+
+def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
+    '''
+    Given training and testing dataset and model id, functions creates a Support Vector Machine classifier with best hyperparameters,
+    calculates the average of expected modeling accuracy using 10-cross validation (if '-c' flag is enabled),
+    trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
+    If '-g' option is enabled, program will first do the grid search analysis with 3-cross validation
+    and automatically fit the model with best hyperparameters.
+    param input: dataset for training and testing, model id
     return: score between predicted and test dataset
 
     '''
-    clf = svm.SVC(kernel='linear') # Linear Kernel
-    if args['cross_validation'] == True:
-        score = cross_validation(clf, data, classes)
-        logging.info('Expected SVM accuracy: {}\n'.format(mean(score)))
+    if args['grid_search'] == False:
+        hyperparam_list = get_best_svm_hyperparameters(model_id)
+        clf = svm.SVC(C=hyperparam_list['C'], gamma=hyperparam_list['gamma'], kernel=hyperparam_list['kernel'])
+        if args['cross_validation'] == True:
+            score = cross_validation(clf, data, classes)
+            logging.info('[SVM] Expected accuracy: {}\n'.format(mean(score)))
 
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
 
-    return metrics.accuracy_score(y_test, y_pred)
+    else:
+        param_grid = {'C': [0.1, 1, 10, 100, 1000],
+                      'gamma': [1, 0.1, 0.01, 0.001, 0.0001],
+                      'kernel': ['rbf', 'linear']}
 
-def nb_classifier(data, classes, X_train, X_test, y_train, y_test):
+        grid = model_selection.GridSearchCV(svm.SVC(), param_grid, refit=True, verbose=3)
+        grid.fit(X_train, y_train)
+
+        logging.debug('[SVM] Best grid parameters: {}'.format(grid.best_params_))
+        logging.debug('[SVM] Best grid estimator: {}'.format(grid.best_estimator_))
+
+        y_pred = grid.predict(X_test)
+
+    return metrics.classification_report(y_test, y_pred)
+
+def get_best_nb_hyperparameters(model_id):
     '''
-    Given dataset for training and testing, functions creates a Naive Bayes classifier,
-    calculates the average of expected modeling accuracy using 10-cross validation,
-    trains the model using the training set, predicts the response for the test dataset
-    and returns the score between predicted and test dataset.
-    param input: dataset for training and testing
+    Given model id, function returns the best grid parameters for SVM classification.
+    param input: model id
+    return: best NB hyperparameters for given model
+
+    '''
+    switcher = {
+        'bow_srb': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_srb': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_unigram_srb': {'alpha': 1.5, 'fit_prior': True},
+        'position_srb': {'alpha': 1.5, 'fit_prior': True},
+        'tf_srb': {'alpha': 1.5, 'fit_prior': True},
+        'tf_idf_srb': {'alpha': 1.5, 'fit_prior': True},
+        'bow_eng': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_eng': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_unigram_eng': {'alpha': 1.5, 'fit_prior': True},
+        'pos_tag_eng': {'alpha': 1.0, 'fit_prior': True},
+        'position_eng': {'alpha': 1.0, 'fit_prior': True},
+        'tf_eng': {'alpha': 1.5, 'fit_prior': True},
+        'tf_idf_eng': {'alpha': 1.5, 'fit_prior': True}
+    }
+
+    return switcher.get(model_id, "[NB] Invalid model id\n")
+
+def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
+    '''
+    Given training and testing dataset and model id, functions creates a Naive Bayes classifier with best hyperparameters,
+    calculates the average of expected modeling accuracy using 10-cross validation (if '-c' flag is enabled),
+    trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
+    If '-g' option is enabled, program will first do the grid search analysis with 3-cross validation
+    and automatically fit the model with best hyperparameters.
+    param input: dataset for training and testing, model id
     return: score between predicted and test dataset
 
     '''
-    clf = naive_bayes.MultinomialNB()
-    if args['cross_validation'] == True:
-        score = cross_validation(clf, data, classes)
-        logging.info('Expected NB accuracy: {}\n'.format(mean(score)))
+    if args['grid_search'] == False:
+        hyperparam_list = get_best_nb_hyperparameters(model_id)
+        clf = naive_bayes.MultinomialNB(priors=hyperparam_list['priors'], var_smoothing=hyperparam_list['var_smoothing'])
+        if args['cross_validation'] == True:
+            score = cross_validation(clf, data, classes)
+            logging.info('[NB] Expected accuracy: {}\n'.format(mean(score)))
 
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
 
-    return metrics.accuracy_score(y_test, y_pred)
+    else:
+        param_grid = {'alpha': [0.5, 1.0, 1.5],
+                      'fit_prior': [True, False]}
 
-def mlp_classifier(data, classes, X_train, X_test, y_train, y_test):
+        grid = model_selection.GridSearchCV(naive_bayes.MultinomialNB(), param_grid, refit=True, verbose=3)
+        grid.fit(X_train, y_train)
+
+        logging.debug('[NB] Best grid parameters: {}'.format(grid.best_params_))
+        logging.debug('[NB] Best grid estimator: {}'.format(grid.best_estimator_))
+
+        y_pred = grid.predict(X_test)
+
+    return metrics.classification_report(y_test, y_pred)
+
+def get_best_mlp_hyperparameters(model_id):
     '''
-    Given dataset for training and testing, functions creates a Multi Layer Perceptron classifier,
-    calculates the average of expected modeling accuracy using 10-cross validation,
-    trains the model using the training set, predicts the response for the test dataset
-    and returns the score between predicted and test dataset.
-    param input: dataset for training and testing
+    Given model id, function returns the best grid parameters for MLP classification.
+    param input: model id
+    return: best MLP hyperparameters for given model
+
+    '''
+    switcher = {
+        'bow_srb': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'bigram_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bigram_unigram_srb': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'position_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'tf_srb': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'tf_idf_srb': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'bigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'bigram_unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'pos_tag_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'position_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'tf_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'tf_idf_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+    }
+
+    return switcher.get(model_id, "[MLP] Invalid model id\n")
+
+def mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
+    '''
+    Given training and testing dataset and model id, functions creates a Multi Layer Perceptron classifier with best hyperparameters,
+    calculates the average of expected modeling accuracy using 10-cross validation (if '-c' flag is enabled),
+    trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
+    If '-g' option is enabled, program will first do the grid search analysis with 3-cross validation
+    and automatically fit the model with best hyperparameters.
+    param input: dataset for training and testing, model id
     return: score between predicted and test dataset
 
     '''
-    clf = neural_network.MLPClassifier()
-    if args['cross_validation'] == True:
-        score = cross_validation(clf, data, classes)
-        logging.info('Expected MLP accuracy: {}\n'.format(mean(score)))
+    if args['grid_search'] == False:
+        hyperparam_list = get_best_mlp_hyperparameters(model_id)
+        clf = neural_network.MLPClassifier(hidden_layer_sizes=hyperparam_list['hidden_layer_sizes'],
+            activation=hyperparam_list['activation'], solver=hyperparam_list['solver'], alpha=hyperparam_list['alpha'])
+        if args['cross_validation'] == True:
+            score = cross_validation(clf, data, classes)
+            logging.info('[MLP] Expected accuracy: {}\n'.format(mean(score)))
 
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
 
-    return metrics.accuracy_score(y_test, y_pred)
+    else:
+        param_grid = {'hidden_layer_sizes': [(50,50,50), (50,100,50), (100,)],
+                      'activation': ['tanh', 'relu'],
+                      'solver': ['sgd', 'adam', 'lbfgs'],
+                      'alpha': [0.0001, 0.05]}
 
-def classification(data, classes, test_size):
+        grid = model_selection.GridSearchCV(neural_network.MLPClassifier(), param_grid, refit=True, verbose=3)
+        grid.fit(X_train, y_train)
+
+        logging.debug('[MLP] Best grid parameters: {}'.format(grid.best_params_))
+        logging.debug('[MLP] Best grid estimator: {}'.format(grid.best_estimator_))
+
+        y_pred = grid.predict(X_test)
+
+    return metrics.classification_report(y_test, y_pred)
+
+def classification(data, classes, model_id):
     '''
     Given data, classes and size parameter, function splits the data in groups for training and testing (size for test group is test_size).
-    Afterwards, function scales the training and test dataset, trains the model data using SVM and NB algorithms
+    Afterwards, function scales the training and test dataset, trains the model data using SVM, NB and MLP algorithms
     and calculates the accuracy between predicted and test data.
     param input: data, classes and size parameter
     return: None
 
     '''
+    test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.2
+
     X_train, X_test, y_train, y_test = model_selection.train_test_split(data, classes, test_size=test_size)
 
     X_train, X_test = scaling(X_train, X_test)
 
-    score = svm_classifier(data, classes, X_train, X_test, y_train, y_test)
-    logging.info('SVM accuracy: {}\n'.format(score))
+    score = svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+    logging.info('[SVM] Accuracy: {}\n'.format(score))
 
-    score = nb_classifier(data, classes, X_train, X_test, y_train, y_test)
-    logging.info('NB accuracy: {}\n'.format(score))
+    score = nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+    logging.info('[NB] Accuracy: {}\n'.format(score))
 
-    score = mlp_classifier(data, classes, X_train, X_test, y_train, y_test)
-    logging.info('MLP accuracy: {}\n'.format(score))
+    score = mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+    logging.info('[MLP] Accuracy: {}\n'.format(score))
 
     gc.collect()
 
@@ -589,33 +716,30 @@ if __name__ == '__main__':
     bow_srb, bigram_srb, bigram_unigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
     bow_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
 
-    # Classification
-    test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.3
-
     logging.info(' --- Serbian reviews (Bag Of Words Model) --- \n')
-    classification(bow_srb, classes_srb, test_size)
+    classification(bow_srb, classes_srb, "bow_srb")
     logging.info(' --- Serbian reviews (Bigram Model) --- \n')
-    classification(bigram_srb, classes_srb, test_size)
+    classification(bigram_srb, classes_srb, "bigram_srb")
     logging.info(' --- Serbian reviews (Bigram + Unigram Model) --- \n')
-    classification(bigram_unigram_srb, classes_srb, test_size)
+    classification(bigram_unigram_srb, classes_srb, "bigram_unigram_srb")
     logging.info(' --- Serbian reviews (Word Position Model) --- \n')
-    classification(position_srb, classes_srb, test_size)
+    classification(position_srb, classes_srb, "position_srb")
     logging.info(' --- Serbian reviews (Term Frequency Model) --- \n')
-    classification(tf_srb, classes_srb, test_size)
+    classification(tf_srb, classes_srb, "tf_srb")
     logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) --- \n')
-    classification(tf_idf_srb, classes_srb, test_size)
+    classification(tf_idf_srb, classes_srb, "tf_idf_srb")
 
     logging.info(' --- English reviews (Bag Of Words Model) --- \n')
-    classification(bow_eng, classes_eng, test_size)
+    classification(bow_eng, classes_eng, "bow_eng")
     logging.info(' --- English reviews (Bigram Model) --- \n')
-    classification(bigram_eng, classes_eng, test_size)
+    classification(bigram_eng, classes_eng, "bigram_eng")
     logging.info(' --- English reviews (Bigram + Unigram Model) --- \n')
-    classification(bigram_unigram_eng, classes_eng, test_size)
+    classification(bigram_unigram_eng, classes_eng, "bigram_unigram_eng")
     logging.info(' --- English reviews (Part Of Speech Model) --- \n')
-    classification(pos_tag_eng, classes_eng, test_size)
+    classification(pos_tag_eng, classes_eng, "pos_tag_eng")
     logging.info(' --- English reviews (Word Position Model) --- \n')
-    classification(position_eng, classes_eng, test_size)
+    classification(position_eng, classes_eng, "position_eng")
     logging.info(' --- English reviews (Term Frequency Model) --- \n')
-    classification(tf_eng, classes_eng, test_size)
+    classification(tf_eng, classes_eng, "tf_eng")
     logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) --- \n')
-    classification(tf_idf_eng, classes_eng, test_size)
+    classification(tf_idf_eng, classes_eng, "tf_idf_eng")
