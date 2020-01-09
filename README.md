@@ -7,9 +7,11 @@
 - src/data folder should contain input data
 
 ### Corpus representations
-- There are two movie review corpuses
+- There are three movie review corpuses
   - Serbian corpus: https://github.com/vukbatanovic/SerbMR (SerbMR-3C - csv format)
     - positive (841), negative (841) and neutral (841) reviews
+  - Serbian corpus: https://github.com/vukbatanovic/SerbMR (SerbMR-2C - csv format)
+    - positive (841) and negative (841) reviews
   - English corpus: http://www.cs.cornell.edu/people/pabo/movie-review-data/review_polarity.tar.gz
     - positive (1000) and negative (1000) reviews
 

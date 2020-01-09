@@ -120,7 +120,7 @@ def convert_to_latin(corpus):
 
     return latin_list
 
-def get_srb_corpus():
+def get_srb_corpus(path):
     '''
     Function goes through all data with Serbian reviews, reads reviews and their positive/negative/neutral ratings
     and puts all informations in Data Frame structure.
@@ -128,8 +128,6 @@ def get_srb_corpus():
     return: Data Frame structure with extracted informations from corpus
 
     '''
-    path = 'data/SerbMR-3C.csv'
-
     try:
         data = pd.read_csv(path, encoding='utf-8')
     except OSError:
@@ -141,7 +139,7 @@ def get_srb_corpus():
 
     return data.Text, data.Rating
 
-def get_eng_corpus():
+def get_eng_corpus(path):
     '''
     Function goes through all path subfolders with English reviews, reads files and their positive/negative ratings
     and puts all informations in Data Frame structure.
@@ -149,8 +147,6 @@ def get_eng_corpus():
     return: Data Frame structure with extracted informations from corpus
 
     '''
-    path = 'data/review_polarity/txt_sentoken'
-
     corpus, classes = [], []
     for root, directories, files in os.walk(path):
         for file in files:
@@ -406,6 +402,9 @@ def text_preprocessing(corpus, language):
             word position model, term frequency model, term frequency - inverse data frequency model
 
     '''
+    num_of_classes = int(language[-1])
+    language = language[:-2]
+
     # Remove punctuation
     no_punctuation_corpus = remove_punctuation(corpus, language)
 
@@ -417,37 +416,37 @@ def text_preprocessing(corpus, language):
 
     # Get the bag of words model
     bag_of_words_model = generate_ngrams(cleaned_corpus, (1, 1))
-    logging.debug('Bag of words model for {} reviews:\n {}'.format(language, bag_of_words_model))
+    logging.debug('Bag of words model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bag_of_words_model))
 
     # Get the unigram model
     unigram_model = generate_ngrams(no_punctuation_corpus, (1, 1))
-    logging.debug('Unigram model for {} reviews:\n {}'.format(language, unigram_model))
+    logging.debug('Unigram model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, unigram_model))
 
     # Get the bigram model
     bigram_model = generate_ngrams(no_punctuation_corpus, (2, 2))
-    logging.debug('Bigram model for {} reviews:\n {}'.format(language, bigram_model))
+    logging.debug('Bigram model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_model))
 
     # Get the bigram + unigram model
     bigram_unigram_model = generate_ngrams(no_punctuation_corpus, (1, 2))
-    logging.debug('Bigram + unigram model for {} reviews:\n {}'.format(language, bigram_unigram_model))
+    logging.debug('Bigram + unigram model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_unigram_model))
 
     # Get the word position model
     word_position_model = word_position_tagging(cleaned_corpus)
-    logging.debug('Word position model for {} reviews:\n {}'.format(language, word_position_model))
+    logging.debug('Word position model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, word_position_model))
 
     # Get the term frequency model from bag of words model
     tf_model = compute_tf(cleaned_corpus)
-    logging.debug('Term frequency model for {} reviews:\n {}'.format(language, tf_model))
+    logging.debug('Term frequency model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_model))
 
     # Get the term frequency - inverse data frequency model
     tf_idf_model = compute_tf_idf(cleaned_corpus)
-    logging.debug('Term frequency - inverse data frequency model for {} reviews:\n {}'.format(language, tf_idf_model))
+    logging.debug('Term frequency - inverse data frequency model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model))
 
     # Get the part of speech tag
     # TODO: change when POS for Serbian corpus is delivered
     if language == 'English':
         pos_tag_model = part_of_speech_tagging(cleaned_corpus)
-        logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
+        logging.debug('POS tag model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, pos_tag_model))
         return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
 
     return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
@@ -486,13 +485,23 @@ def get_best_svm_hyperparameters(model_id):
 
     '''
     switcher = {
-        'bow_srb': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
-        'unigram_srb': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_srb': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_unigram_srb': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'position_srb': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
-        'tf_srb': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
-        'tf_idf_srb': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        # Serbian language with three classes
+        'bow_srb_3': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
+        'unigram_srb_3': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_srb_3': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_unigram_srb_3': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'position_srb_3': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'tf_idf_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        # Serbian language with two classes
+        'bow_srb_2': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
+        'unigram_srb_2': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_srb_2': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_unigram_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'position_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_srb_2': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'tf_idf_srb_2': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        # English language with two classes
         'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'unigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'bigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
@@ -549,13 +558,23 @@ def get_best_nb_hyperparameters(model_id):
 
     '''
     switcher = {
-        'bow_srb': {'alpha': 1.5, 'fit_prior': True},
-        'unigram_srb': {'alpha': 1.5, 'fit_prior': True},
-        'bigram_srb': {'alpha': 1.5, 'fit_prior': True},
-        'bigram_unigram_srb': {'alpha': 1.5, 'fit_prior': True},
-        'position_srb': {'alpha': 1.5, 'fit_prior': True},
-        'tf_srb': {'alpha': 1.5, 'fit_prior': True},
-        'tf_idf_srb': {'alpha': 1.5, 'fit_prior': True},
+        # Serbian language with three classes
+        'bow_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'unigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_unigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'position_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'tf_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'tf_idf_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        # Serbian language with two classes
+        'bow_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'position_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'tf_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'tf_idf_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        # English language with two classes
         'bow_eng': {'alpha': 1.5, 'fit_prior': True},
         'unigram_eng': {'alpha': 1.5, 'fit_prior': True},
         'bigram_eng': {'alpha': 1.5, 'fit_prior': True},
@@ -611,13 +630,23 @@ def get_best_mlp_hyperparameters(model_id):
 
     '''
     switcher = {
-        'bow_srb': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
-        'unigram_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_unigram_srb': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'position_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
-        'tf_srb': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
-        'tf_idf_srb': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        # Serbian language with three classes
+        'bow_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'unigram_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bigram_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bigram_unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'position_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'tf_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'tf_idf_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        # Serbian language with two classes
+        'bow_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'unigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bigram_unigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'position_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'tf_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'tf_idf_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        # English language with two classes
         'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'unigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'bigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
@@ -705,43 +734,71 @@ if __name__ == '__main__':
     # Install nltk dependencies
     nltk_dependencies()
 
+    # Define path to input files
+    srb_3_classes_path = 'data/SerbMR-3C.csv'
+    srb_2_classes_path = 'data/SerbMR-2C.csv'
+    eng_2_classes_path = 'data/review_polarity/txt_sentoken'
+
     # Get the datasets for Serbian and English reviews
-    corpus_srb, classes_srb = get_srb_corpus()
-    corpus_eng, classes_eng = get_eng_corpus()
+    corpus_srb_3, classes_srb_3 = get_srb_corpus(srb_3_classes_path)
+    corpus_srb_2, classes_srb_2 = get_srb_corpus(srb_2_classes_path)
+    corpus_eng, classes_eng = get_eng_corpus(eng_2_classes_path)
 
-    # Get different data representations: bag of words, unigram model, bigram model, bigram + unigram model,
-    # part of speech tagging, word position tagging, tf model, tf-idf model
-    bow_srb, unigram_srb, bigram_srb, bigram_unigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
-    bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
+    # Get different corpus representations for Serbian corpus with three classses
+    bow_srb_3, unigram_srb_3, bigram_srb_3, bigram_unigram_srb_3, position_srb_3, tf_srb_3, tf_idf_srb_3 = text_preprocessing(corpus_srb_3, 'Serbian_3')
 
-    logging.info(' --- Serbian reviews (Bag Of Words Model) --- \n')
-    classification(bow_srb, classes_srb, "bow_srb")
-    logging.info(' --- Serbian reviews (Unigram Model) --- \n')
-    classification(unigram_srb, classes_srb, "unigram_srb")
-    logging.info(' --- Serbian reviews (Bigram Model) --- \n')
-    classification(bigram_srb, classes_srb, "bigram_srb")
-    logging.info(' --- Serbian reviews (Bigram + Unigram Model) --- \n')
-    classification(bigram_unigram_srb, classes_srb, "bigram_unigram_srb")
-    logging.info(' --- Serbian reviews (Word Position Model) --- \n')
-    classification(position_srb, classes_srb, "position_srb")
-    logging.info(' --- Serbian reviews (Term Frequency Model) --- \n')
-    classification(tf_srb, classes_srb, "tf_srb")
-    logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) --- \n')
-    classification(tf_idf_srb, classes_srb, "tf_idf_srb")
+    # Classification for all corpus representations
+    logging.info(' --- Serbian reviews (Bag Of Words Model) for three classes --- \n')
+    classification(bow_srb_3, classes_srb_3, "bow_srb_3")
+    logging.info(' --- Serbian reviews (Unigram Model) for three classes --- \n')
+    classification(unigram_srb_3, classes_srb_3, "unigram_srb_3")
+    logging.info(' --- Serbian reviews (Bigram Model) for three classes --- \n')
+    classification(bigram_srb_3, classes_srb_3, "bigram_srb_3")
+    logging.info(' --- Serbian reviews (Bigram + Unigram Model) for three classes --- \n')
+    classification(bigram_unigram_srb_3, classes_srb_3, "bigram_unigram_srb_3")
+    logging.info(' --- Serbian reviews (Word Position Model) for three classes --- \n')
+    classification(position_srb_3, classes_srb_3, "position_srb_3")
+    logging.info(' --- Serbian reviews (Term Frequency Model) for three classes --- \n')
+    classification(tf_srb_3, classes_srb_3, "tf_srb_3")
+    logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for three classes --- \n')
+    classification(tf_idf_srb_3, classes_srb_3, "tf_idf_srb_3")
 
-    logging.info(' --- English reviews (Bag Of Words Model) --- \n')
+    # Get different corpus representations for Serbian corpus with two classses
+    bow_srb_2, unigram_srb_2, bigram_srb_2, bigram_unigram_srb_2, position_srb_2, tf_srb_2, tf_idf_srb_2 = text_preprocessing(corpus_srb_2, 'Serbian_2')
+
+    # Classification for all corpus representations
+    logging.info(' --- Serbian reviews (Bag Of Words Model) for two classes --- \n')
+    classification(bow_srb_2, classes_srb_2, "bow_srb_2")
+    logging.info(' --- Serbian reviews (Unigram Model) for two classes --- \n')
+    classification(unigram_srb_2, classes_srb_2, "unigram_srb_2")
+    logging.info(' --- Serbian reviews (Bigram Model) for two classes --- \n')
+    classification(bigram_srb_2, classes_srb_2, "bigram_srb_2")
+    logging.info(' --- Serbian reviews (Bigram + Unigram Model) for two classes --- \n')
+    classification(bigram_unigram_srb_2, classes_srb_2, "bigram_unigram_srb_2")
+    logging.info(' --- Serbian reviews (Word Position Model) for two classes --- \n')
+    classification(position_srb_2, classes_srb_2, "position_srb_2")
+    logging.info(' --- Serbian reviews (Term Frequency Model) for two classes --- \n')
+    classification(tf_srb_2, classes_srb_2, "tf_srb_2")
+    logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+    classification(tf_idf_srb_2, classes_srb_2, "tf_idf_srb_2")
+
+    # Get different corpus representations for English corpus with two classses
+    bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English_2')
+
+    # Classification for all corpus representations
+    logging.info(' --- English reviews (Bag Of Words Model) for two classes --- \n')
     classification(bow_eng, classes_eng, "bow_eng")
-    logging.info(' --- English reviews (Unigram Model) --- \n')
+    logging.info(' --- English reviews (Unigram Model) for two classes --- \n')
     classification(unigram_eng, classes_eng, "unigram_eng")
-    logging.info(' --- English reviews (Bigram Model) --- \n')
+    logging.info(' --- English reviews (Bigram Model) for two classes --- \n')
     classification(bigram_eng, classes_eng, "bigram_eng")
-    logging.info(' --- English reviews (Bigram + Unigram Model) --- \n')
+    logging.info(' --- English reviews (Bigram + Unigram Model) for two classes --- \n')
     classification(bigram_unigram_eng, classes_eng, "bigram_unigram_eng")
-    logging.info(' --- English reviews (Part Of Speech Model) --- \n')
+    logging.info(' --- English reviews (Part Of Speech Model) for two classes --- \n')
     classification(pos_tag_eng, classes_eng, "pos_tag_eng")
-    logging.info(' --- English reviews (Word Position Model) --- \n')
+    logging.info(' --- English reviews (Word Position Model) for two classes --- \n')
     classification(position_eng, classes_eng, "position_eng")
-    logging.info(' --- English reviews (Term Frequency Model) --- \n')
+    logging.info(' --- English reviews (Term Frequency Model) for two classes --- \n')
     classification(tf_eng, classes_eng, "tf_eng")
-    logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) --- \n')
+    logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
     classification(tf_idf_eng, classes_eng, "tf_idf_eng")
