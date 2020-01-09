@@ -15,6 +15,7 @@
 
 - Corpuses are represented in different styles:
   - Bag of words (BOW) model
+  - Unigram model
   - Bigram model
   - Bigram + unigram model
   - Part of speech (POS) model
@@ -25,6 +26,7 @@
 - Additional:
   - Corpuses are cleaned from punctuation and stopwords
   - Words are reduced to their root form (stemming)
+  - For ngram models only punctuation cleaning is performed
 
 ### Machine learning techniques
 - All models are trained and tested using two algorithms:

@@ -210,45 +210,29 @@ def remove_stopwords(corpus, language):
 
     return cleaned_text
 
-def clean_coprus(corpus, language):
-    '''
-    Given corpus, function removes punctuation and stopwords in all corpus documents for the selected language.
-    param input: corpus, language
-    return: corpus w/o punctuation
-
-    '''
-    no_punctuation = remove_punctuation(corpus, language)
-    cleaned_corpus = remove_stopwords(no_punctuation, language)
-
-    return cleaned_corpus
-
-def lemmatization_and_stemming(corpus, language):
+def stemming(corpus, language):
     '''
     Given corpus and language indicator, function is doing "word normalization", ie. reducing inflection in words to their root forms
-    for all words across all documents in the corpus. First is lemmatization applied (replacing a word with his dictionary form) and
-    then stemming (replacing a word with his "root" form).
-    For Serbian movies, stemming is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
-    For English movies, lemmatization is done by using WordNetLemmatizer from nltk.
-    Stemming is done by using existing stemmer from nltk - Porter Stemmer.
+    for all words across all documents in the corpus.
+    For Serbian movies, it is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
+    For English movies, it is done by using existing stemmer from nltk - Porter Stemmer.
     param input: corpus, language indicator
-    return: lemmatizated and stemmed corpus
+    return: stemmed corpus
 
     '''
     stemming_list = []
     if language == 'Serbian':
-        # TODO: find the word first in the vocabulary when it is delivered
         for document in corpus:
             l = ss.stem_str(document)
             stemming_list.append("".join(l))
 
     else:
-        wl = nltk.stem.WordNetLemmatizer()
         ps = nltk.stem.PorterStemmer()
         for document in corpus:
             words = nltk.word_tokenize(document)
             l = []
             for w in words:
-                l.append(ps.stem(wl.lemmatize(w)))
+                l.append(ps.stem(w))
                 l.append(' ')
             stemming_list.append("".join(l))
 
@@ -257,7 +241,7 @@ def lemmatization_and_stemming(corpus, language):
 def generate_ngrams(corpus, n):
     '''
     Given corpus and number n, function extracts all ngrams from all files in corpus.
-    For n = (1, 1) this function creates a bag of words model.
+    For n = (1, 1) this function creates a unigram model (or bag of words model).
     For n = (2, 2) this function creates a bigram model.
     For n = (1, 2) this function creates a bigram + unigram model.
     param input: corpus, number n
@@ -408,8 +392,9 @@ def compute_tf_idf(corpus):
 def text_preprocessing(corpus, language):
     '''
     Given corpus and language indicator, function first removes punctuation and stopwords,
-    lemmatizates/stemms words and then creates different types of corpus representations:
+    stemms words and then creates different types of corpus representations:
     - bag of words model
+    - unigram model
     - bigram model
     - bigram + unigram model
     - part of speech model
@@ -417,26 +402,33 @@ def text_preprocessing(corpus, language):
     - term frequency model
     - term frequency - inverse data frequency model
     param input: corpus, language indicator
-    return: bag of words model, bigram model, bigram + unigram model, part of speech model, word position model,
-            term frequency model, term frequency - inverse data frequency model
+    return: bag of words model, unigram model, bigram model, bigram + unigram model, part of speech model,
+            word position model, term frequency model, term frequency - inverse data frequency model
 
     '''
-    # Remove punctuation and stopwords
-    cleaned_corpus = clean_coprus(corpus, language)
+    # Remove punctuation
+    no_punctuation_corpus = remove_punctuation(corpus, language)
 
-    # Lemmatization and stemming
-    cleaned_corpus = lemmatization_and_stemming(cleaned_corpus, language)
+    # Remove stopwords
+    no_stopwords_corpus = remove_stopwords(no_punctuation_corpus, language)
+
+    # Stemming
+    cleaned_corpus = stemming(no_stopwords_corpus, language)
 
     # Get the bag of words model
     bag_of_words_model = generate_ngrams(cleaned_corpus, (1, 1))
-    logging.debug('Bag of words for {} reviews:\n {}'.format(language, bag_of_words_model))
+    logging.debug('Bag of words model for {} reviews:\n {}'.format(language, bag_of_words_model))
+
+    # Get the unigram model
+    unigram_model = generate_ngrams(no_punctuation_corpus, (1, 1))
+    logging.debug('Unigram model for {} reviews:\n {}'.format(language, unigram_model))
 
     # Get the bigram model
-    bigram_model = generate_ngrams(cleaned_corpus, (2, 2))
+    bigram_model = generate_ngrams(no_punctuation_corpus, (2, 2))
     logging.debug('Bigram model for {} reviews:\n {}'.format(language, bigram_model))
 
     # Get the bigram + unigram model
-    bigram_unigram_model = generate_ngrams(cleaned_corpus, (1, 2))
+    bigram_unigram_model = generate_ngrams(no_punctuation_corpus, (1, 2))
     logging.debug('Bigram + unigram model for {} reviews:\n {}'.format(language, bigram_unigram_model))
 
     # Get the word position model
@@ -456,9 +448,9 @@ def text_preprocessing(corpus, language):
     if language == 'English':
         pos_tag_model = part_of_speech_tagging(cleaned_corpus)
         logging.debug('POS tag model for {} reviews:\n {}'.format(language, pos_tag_model))
-        return bag_of_words_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
+        return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
 
-    return bag_of_words_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
+    return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
 
 def scaling(X_train, X_test):
     '''
@@ -495,12 +487,14 @@ def get_best_svm_hyperparameters(model_id):
     '''
     switcher = {
         'bow_srb': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
+        'unigram_srb': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
         'bigram_srb': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
         'bigram_unigram_srb': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'position_srb': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_srb': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'tf_idf_srb': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'unigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'bigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'bigram_unigram_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
         'pos_tag_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
@@ -556,12 +550,14 @@ def get_best_nb_hyperparameters(model_id):
     '''
     switcher = {
         'bow_srb': {'alpha': 1.5, 'fit_prior': True},
+        'unigram_srb': {'alpha': 1.5, 'fit_prior': True},
         'bigram_srb': {'alpha': 1.5, 'fit_prior': True},
         'bigram_unigram_srb': {'alpha': 1.5, 'fit_prior': True},
         'position_srb': {'alpha': 1.5, 'fit_prior': True},
         'tf_srb': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_srb': {'alpha': 1.5, 'fit_prior': True},
         'bow_eng': {'alpha': 1.5, 'fit_prior': True},
+        'unigram_eng': {'alpha': 1.5, 'fit_prior': True},
         'bigram_eng': {'alpha': 1.5, 'fit_prior': True},
         'bigram_unigram_eng': {'alpha': 1.5, 'fit_prior': True},
         'pos_tag_eng': {'alpha': 1.0, 'fit_prior': True},
@@ -585,7 +581,7 @@ def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     '''
     if args['grid_search'] == False:
         hyperparam_list = get_best_nb_hyperparameters(model_id)
-        clf = naive_bayes.MultinomialNB(priors=hyperparam_list['priors'], var_smoothing=hyperparam_list['var_smoothing'])
+        clf = naive_bayes.MultinomialNB(alpha=hyperparam_list['alpha'], fit_prior=hyperparam_list['fit_prior'])
         if args['cross_validation'] == True:
             score = cross_validation(clf, data, classes)
             logging.info('[NB] Expected accuracy: {}\n'.format(mean(score)))
@@ -616,12 +612,14 @@ def get_best_mlp_hyperparameters(model_id):
     '''
     switcher = {
         'bow_srb': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'unigram_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'bigram_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'bigram_unigram_srb': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'position_srb': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
         'tf_srb': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_srb': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'unigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'bigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'bigram_unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'pos_tag_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
@@ -711,13 +709,15 @@ if __name__ == '__main__':
     corpus_srb, classes_srb = get_srb_corpus()
     corpus_eng, classes_eng = get_eng_corpus()
 
-    # Get different data representations: bag of words, bigram model, bigram + unigram model,
+    # Get different data representations: bag of words, unigram model, bigram model, bigram + unigram model,
     # part of speech tagging, word position tagging, tf model, tf-idf model
-    bow_srb, bigram_srb, bigram_unigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
-    bow_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
+    bow_srb, unigram_srb, bigram_srb, bigram_unigram_srb, position_srb, tf_srb, tf_idf_srb = text_preprocessing(corpus_srb, 'Serbian')
+    bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English')
 
     logging.info(' --- Serbian reviews (Bag Of Words Model) --- \n')
     classification(bow_srb, classes_srb, "bow_srb")
+    logging.info(' --- Serbian reviews (Unigram Model) --- \n')
+    classification(unigram_srb, classes_srb, "unigram_srb")
     logging.info(' --- Serbian reviews (Bigram Model) --- \n')
     classification(bigram_srb, classes_srb, "bigram_srb")
     logging.info(' --- Serbian reviews (Bigram + Unigram Model) --- \n')
@@ -731,6 +731,8 @@ if __name__ == '__main__':
 
     logging.info(' --- English reviews (Bag Of Words Model) --- \n')
     classification(bow_eng, classes_eng, "bow_eng")
+    logging.info(' --- English reviews (Unigram Model) --- \n')
+    classification(unigram_eng, classes_eng, "unigram_eng")
     logging.info(' --- English reviews (Bigram Model) --- \n')
     classification(bigram_eng, classes_eng, "bigram_eng")
     logging.info(' --- English reviews (Bigram + Unigram Model) --- \n')

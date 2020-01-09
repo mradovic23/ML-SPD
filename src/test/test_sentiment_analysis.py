@@ -46,9 +46,9 @@ class TestPreprocessFunctionalities(unittest.TestCase):
 
         self.assertTrue((cleaned_corpus_srb == expected_srb) and (cleaned_corpus_eng == expected_eng))
 
-    def test_lemmatization_and_stemming(self):
+    def test_stemming(self):
         # TODO: add for Serbian movies when stemmer works fine
-        stemmed_corpus_eng = sa.lemmatization_and_stemming(corpus_eng, 'English')
+        stemmed_corpus_eng = sa.stemming(corpus_eng, 'English')
 
         expected_eng = ["I do n't like movi 'the godfath ' at all . It is terribl bore , long and uninterest ! ",
                         "I recommend everyon to watch the movi 'memento ' . I 'm thrill with it . "]
