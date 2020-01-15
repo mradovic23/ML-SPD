@@ -7,13 +7,15 @@
 - src/data folder should contain input data
 
 ### Corpus representations
-- There are three movie review corpuses
+- There are four movie review corpuses
   - Serbian corpus: https://github.com/vukbatanovic/SerbMR (SerbMR-3C - csv format)
     - positive (841), negative (841) and neutral (841) reviews
   - Serbian corpus: https://github.com/vukbatanovic/SerbMR (SerbMR-2C - csv format)
     - positive (841) and negative (841) reviews
   - English corpus: http://www.cs.cornell.edu/people/pabo/movie-review-data/review_polarity.tar.gz
     - positive (1000) and negative (1000) reviews
+  - Turkish corpus: src/data/HUMIRSentimentDatasets.csv (considered only movie reviews)
+    - positive and negative reviews (random 3000 reviews out of ~53000)
 
 - Corpuses are represented in different styles:
   - Bag of words (BOW) model
@@ -45,6 +47,7 @@
 - Python 3.7.4 (64 bit) or above
 - Libraries:
   - os
+  - sys
   - logging
   - argparse
   - pandas
@@ -55,6 +58,7 @@
   - statistics
   - cyrtranslit
   - gc
+  - TurkishStemmer
 
 ## Usage:
 - Download the corpuses (unzip if necessary) and locate them in src/data folder
@@ -64,4 +68,4 @@
   - set the option for 10-cross validation e.g. "python sentiment_analysis.py -c"
   - set the option for grid search e.g. "python sentiment_analysis.py -g"
   - type "python sentiment_analysis.py --help" to show all argument options
-- Testing: go to src/test folder, type "python test_sentiment_analysis.py"
+- Testing: go to src/test folder and type "python test_sentiment_analysis.py"

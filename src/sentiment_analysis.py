@@ -1,6 +1,7 @@
 # coding=UTF-8
 
 import os
+import sys
 import logging
 import argparse
 import nltk
@@ -21,6 +22,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from helper import serbian_stemmer as ss
 from helper import serbian_stopwords as ssw
+from TurkishStemmer import TurkishStemmer
 
 def get_parser():
     '''
@@ -170,6 +172,38 @@ def get_eng_corpus(path):
 
     return data.Text, data.Rating
 
+def get_tur_corpus(path):
+    '''
+    Function goes through all data with Turkish reviews, reads reviews and their positive/negative/neutral ratings
+    and puts all informations in Data Frame structure.
+    param input: None
+    return: Data Frame structure with extracted informations from corpus
+
+    '''
+    corpus, classes = [], []
+    try:
+        f = open(path, 'r', encoding='utf-8')
+        lines = f.readlines()
+        for l in lines:
+            start_index = l.find('Movie Review;') + len('Movie Review;')
+            if start_index != len('Movie Review;') - 1:
+                data = l[start_index:]
+                commas = [j for j, c in enumerate(data) if c == ';']
+                end_index = commas[-3]
+                classes.append(data[end_index + 1:end_index + 9])
+                data = data[:end_index]
+                corpus.append(data)
+    except OSError:
+        logging.ERROR('Could not open: {}', path)
+        sys.exit()
+
+    data = {'Text': corpus, 'Rating': classes}
+    data = pd.DataFrame(data)
+    data = data.sample(n=3000)
+    data.Text = lower(data.Text)
+
+    return data.Text, data.Rating
+
 def remove_punctuation(corpus, language):
     '''
     Given corpus, function removes punctuation in all corpus documents.
@@ -197,8 +231,13 @@ def remove_stopwords(corpus, language):
     '''
     if language == 'Serbian':
         stopwords = ssw.get_list_of_stopwords()
-    else:
+    elif language == 'English':
         stopwords = nltk.corpus.stopwords.words('english')
+    elif language == 'Turkish':
+        stopwords = nltk.corpus.stopwords.words('turkish')
+    else:
+        logging.error('Undefined language!\n')
+        sys.exit()
 
     cleaned_text = []
     for c in corpus:
@@ -212,6 +251,7 @@ def stemming(corpus, language):
     for all words across all documents in the corpus.
     For Serbian movies, it is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
     For English movies, it is done by using existing stemmer from nltk - Porter Stemmer.
+    For Turkish movies, it is done by using existing TurkishStemmer.
     param input: corpus, language indicator
     return: stemmed corpus
 
@@ -221,14 +261,19 @@ def stemming(corpus, language):
         for document in corpus:
             l = ss.stem_str(document)
             stemming_list.append("".join(l))
-
     else:
-        ps = nltk.stem.PorterStemmer()
+        if language == 'English':
+            stemmer = nltk.stem.PorterStemmer()
+        elif language == 'Turkish':
+            stemmer = TurkishStemmer()
+        else:
+            logging.error('Undefined language!\n')
+            sys.exit()
         for document in corpus:
             words = nltk.word_tokenize(document)
             l = []
             for w in words:
-                l.append(ps.stem(w))
+                l.append(stemmer.stem(w))
                 l.append(' ')
             stemming_list.append("".join(l))
 
@@ -488,28 +533,36 @@ def get_best_svm_hyperparameters(model_id):
         # Serbian language with three classes
         'bow_srb_3': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
         'unigram_srb_3': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_srb_3': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_srb_3': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'bigram_unigram_srb_3': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'position_srb_3': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'tf_idf_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         # Serbian language with two classes
-        'bow_srb_2': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
-        'unigram_srb_2': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_srb_2': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_unigram_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'bow_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'unigram_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
+        'bigram_srb_2': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_unigram_srb_2': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
         'position_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
-        'tf_srb_2': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
-        'tf_idf_srb_2': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'tf_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_idf_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         # English language with two classes
         'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
-        'unigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'unigram_eng': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
         'bigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'bigram_unigram_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bigram_unigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'pos_tag_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'position_eng': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
         'tf_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'tf_idf_eng': {'C': 1, 'gamma': 1, 'kernel': 'linear'}
+        'tf_idf_eng': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
+        # Turkish language with two classes
+        'bow_tur': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'unigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'bigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'bigram_unigram_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'position_tur': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'tf_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'tf_idf_tur': {'C': 1, 'gamma': 1, 'kernel': 'linear'}
     }
 
     return switcher.get(model_id, "[SVM] Invalid model id\n")
@@ -560,7 +613,7 @@ def get_best_nb_hyperparameters(model_id):
     switcher = {
         # Serbian language with three classes
         'bow_srb_3': {'alpha': 1.5, 'fit_prior': True},
-        'unigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'unigram_srb_3': {'alpha': 1.5, 'fit_prior': False},
         'bigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
         'bigram_unigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
         'position_srb_3': {'alpha': 1.5, 'fit_prior': True},
@@ -571,9 +624,9 @@ def get_best_nb_hyperparameters(model_id):
         'unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'bigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'bigram_unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'position_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'tf_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'tf_idf_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'position_srb_2': {'alpha': 1.5, 'fit_prior': False},
+        'tf_srb_2': {'alpha': 1.0, 'fit_prior': False},
+        'tf_idf_srb_2': {'alpha': 1.0, 'fit_prior': False},
         # English language with two classes
         'bow_eng': {'alpha': 1.5, 'fit_prior': True},
         'unigram_eng': {'alpha': 1.5, 'fit_prior': True},
@@ -582,7 +635,15 @@ def get_best_nb_hyperparameters(model_id):
         'pos_tag_eng': {'alpha': 1.0, 'fit_prior': True},
         'position_eng': {'alpha': 1.0, 'fit_prior': True},
         'tf_eng': {'alpha': 1.5, 'fit_prior': True},
-        'tf_idf_eng': {'alpha': 1.5, 'fit_prior': True}
+        'tf_idf_eng': {'alpha': 1.5, 'fit_prior': True},
+        # Turkish language with two classes
+        'bow_tur': {'alpha': 1.5, 'fit_prior': True},
+        'unigram_tur': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_tur': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_unigram_tur': {'alpha': 1.5, 'fit_prior': True},
+        'position_tur': {'alpha': 1.0, 'fit_prior': True},
+        'tf_tur': {'alpha': 1.5, 'fit_prior': True},
+        'tf_idf_tur': {'alpha': 1.5, 'fit_prior': True}
     }
 
     return switcher.get(model_id, "[NB] Invalid model id\n")
@@ -632,29 +693,37 @@ def get_best_mlp_hyperparameters(model_id):
     switcher = {
         # Serbian language with three classes
         'bow_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
-        'unigram_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'bigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+        'bigram_unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         'position_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
         'tf_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         # Serbian language with two classes
-        'bow_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
-        'unigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_unigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'position_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
-        'tf_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
-        'tf_idf_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        'bow_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'unigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'bigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'bigram_unigram_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'position_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        'tf_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'tf_idf_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         # English language with two classes
         'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'unigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'bigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'bigram_unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'bigram_unigram_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'pos_tag_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'position_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
         'tf_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+        # Turkish language with two classes
+        'bow_tur': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'unigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'bigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'bigram_unigram_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'position_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'tf_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'tf_idf_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
     }
 
     return switcher.get(model_id, "[MLP] Invalid model id\n")
@@ -738,11 +807,13 @@ if __name__ == '__main__':
     srb_3_classes_path = 'data/SerbMR-3C.csv'
     srb_2_classes_path = 'data/SerbMR-2C.csv'
     eng_2_classes_path = 'data/review_polarity/txt_sentoken'
+    tur_2_classes_path = 'data/HUMIRSentimentDatasets.csv'
 
     # Get the datasets for Serbian and English reviews
     corpus_srb_3, classes_srb_3 = get_srb_corpus(srb_3_classes_path)
     corpus_srb_2, classes_srb_2 = get_srb_corpus(srb_2_classes_path)
     corpus_eng, classes_eng = get_eng_corpus(eng_2_classes_path)
+    corpus_tur, classes_tur = get_tur_corpus(tur_2_classes_path)
 
     # Get different corpus representations for Serbian corpus with three classses
     bow_srb_3, unigram_srb_3, bigram_srb_3, bigram_unigram_srb_3, position_srb_3, tf_srb_3, tf_idf_srb_3 = text_preprocessing(corpus_srb_3, 'Serbian_3')
@@ -802,3 +873,22 @@ if __name__ == '__main__':
     classification(tf_eng, classes_eng, "tf_eng")
     logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
     classification(tf_idf_eng, classes_eng, "tf_idf_eng")
+
+    # Get different corpus representations for Turkish corpus with two classses
+    bow_tur, unigram_tur, bigram_tur, bigram_unigram_tur, position_tur, tf_tur, tf_idf_tur = text_preprocessing(corpus_tur, 'Turkish_2')
+
+    # Classification for all corpus representations
+    logging.info(' --- Turkish reviews (Bag Of Words Model) for two classes --- \n')
+    classification(bow_tur, classes_tur, "bow_tur")
+    logging.info(' --- Turkish reviews (Unigram Model) for two classes --- \n')
+    classification(unigram_tur, classes_tur, "unigram_tur")
+    logging.info(' --- Turkish reviews (Bigram Model) for two classes --- \n')
+    classification(bigram_tur, classes_tur, "bigram_tur")
+    logging.info(' --- Turkish reviews (Bigram + Unigram Model) for two classes --- \n')
+    classification(bigram_unigram_tur, classes_tur, "bigram_unigram_tur")
+    logging.info(' --- Turkish reviews (Word Position Model) for two classes --- \n')
+    classification(position_tur, classes_tur, "position_tur")
+    logging.info(' --- Turkish reviews (Term Frequency Model) for two classes --- \n')
+    classification(tf_tur, classes_tur, "tf_tur")
+    logging.info(' --- Turkish reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+    classification(tf_idf_tur, classes_tur, "tf_idf_tur")
