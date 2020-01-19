@@ -23,6 +23,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from helper import serbian_stemmer as ss
 from helper import serbian_stopwords as ssw
 from TurkishStemmer import TurkishStemmer
+from gensim.models import Word2Vec
 
 def get_parser():
     '''
@@ -430,6 +431,31 @@ def compute_tf_idf(corpus):
 
     return c.toarray()
 
+def generate_word2vec(corpus):
+    '''
+    Given corpus, function first creates the word to vector model from all words in all documents and then
+    creates a suitable model that can be used for ML training by averaging all words in single document.
+    param input: corpus
+    return: word to vector model
+
+    '''
+    all_words = [nltk.word_tokenize(doc) for doc in corpus]
+    w2v_model = Word2Vec(all_words, sg=1)
+
+    model = []
+    for c in corpus:
+        temp = pd.DataFrame()
+        for w in nltk.word_tokenize(c):
+            try:
+                word_vec = w2v_model[w]
+                temp = temp.append(pd.Series(word_vec), ignore_index=True)
+            except:
+                pass
+        temp = temp.mean()
+        model.append(temp)
+
+    return model
+
 def text_preprocessing(corpus, language):
     '''
     Given corpus and language indicator, function first removes punctuation and stopwords,
@@ -442,9 +468,10 @@ def text_preprocessing(corpus, language):
     - word position model
     - term frequency model
     - term frequency - inverse data frequency model
+    - word to vector model
     param input: corpus, language indicator
     return: bag of words model, unigram model, bigram model, bigram + unigram model, part of speech model,
-            word position model, term frequency model, term frequency - inverse data frequency model
+            word position model, term frequency model, term frequency - inverse data frequency model, word to vector model
 
     '''
     num_of_classes = int(language[-1])
@@ -487,14 +514,18 @@ def text_preprocessing(corpus, language):
     tf_idf_model = compute_tf_idf(cleaned_corpus)
     logging.debug('Term frequency - inverse data frequency model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model))
 
+    # Get the word to vector model
+    w2v_model = generate_word2vec(cleaned_corpus)
+    logging.debug('Word to vector model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, w2v_model))
+
     # Get the part of speech tag
     # TODO: change when POS for Serbian corpus is delivered
     if language == 'English':
         pos_tag_model = part_of_speech_tagging(cleaned_corpus)
         logging.debug('POS tag model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, pos_tag_model))
-        return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model
+        return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model, w2v_model
 
-    return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model
+    return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model, w2v_model
 
 def scaling(X_train, X_test):
     '''
@@ -538,6 +569,7 @@ def get_best_svm_hyperparameters(model_id):
         'position_srb_3': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'tf_idf_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'w2v_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         # Serbian language with two classes
         'bow_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'unigram_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
@@ -546,6 +578,7 @@ def get_best_svm_hyperparameters(model_id):
         'position_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_srb_2': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_idf_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'w2v_srb_2': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         # English language with two classes
         'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'unigram_eng': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
@@ -555,6 +588,7 @@ def get_best_svm_hyperparameters(model_id):
         'position_eng': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
         'tf_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
         'tf_idf_eng': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
+        'w2v_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         # Turkish language with two classes
         'bow_tur': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'unigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
@@ -562,7 +596,8 @@ def get_best_svm_hyperparameters(model_id):
         'bigram_unigram_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
         'position_tur': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
         'tf_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'tf_idf_tur': {'C': 1, 'gamma': 1, 'kernel': 'linear'}
+        'tf_idf_tur': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
+        'w2v_tur': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'}
     }
 
     return switcher.get(model_id, "[SVM] Invalid model id\n")
@@ -619,6 +654,7 @@ def get_best_nb_hyperparameters(model_id):
         'position_srb_3': {'alpha': 1.5, 'fit_prior': True},
         'tf_srb_3': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'w2v_srb_3': {'alpha': 1.5, 'fit_prior': True},
         # Serbian language with two classes
         'bow_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
@@ -627,6 +663,7 @@ def get_best_nb_hyperparameters(model_id):
         'position_srb_2': {'alpha': 1.5, 'fit_prior': False},
         'tf_srb_2': {'alpha': 1.0, 'fit_prior': False},
         'tf_idf_srb_2': {'alpha': 1.0, 'fit_prior': False},
+        'w2v_srb_2': {'alpha': 1.5, 'fit_prior': True},
         # English language with two classes
         'bow_eng': {'alpha': 1.5, 'fit_prior': True},
         'unigram_eng': {'alpha': 1.5, 'fit_prior': True},
@@ -636,6 +673,7 @@ def get_best_nb_hyperparameters(model_id):
         'position_eng': {'alpha': 1.0, 'fit_prior': True},
         'tf_eng': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_eng': {'alpha': 1.5, 'fit_prior': True},
+        'w2v_eng': {'alpha': 1.5, 'fit_prior': True},
         # Turkish language with two classes
         'bow_tur': {'alpha': 1.5, 'fit_prior': True},
         'unigram_tur': {'alpha': 1.5, 'fit_prior': True},
@@ -643,7 +681,8 @@ def get_best_nb_hyperparameters(model_id):
         'bigram_unigram_tur': {'alpha': 1.5, 'fit_prior': True},
         'position_tur': {'alpha': 1.0, 'fit_prior': True},
         'tf_tur': {'alpha': 1.5, 'fit_prior': True},
-        'tf_idf_tur': {'alpha': 1.5, 'fit_prior': True}
+        'tf_idf_tur': {'alpha': 1.5, 'fit_prior': True},
+        'w2v_tur': {'alpha': 1.5, 'fit_prior': True}
     }
 
     return switcher.get(model_id, "[NB] Invalid model id\n")
@@ -699,6 +738,7 @@ def get_best_mlp_hyperparameters(model_id):
         'position_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
         'tf_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        'w2v_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         # Serbian language with two classes
         'bow_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
         'unigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
@@ -707,6 +747,7 @@ def get_best_mlp_hyperparameters(model_id):
         'position_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         'tf_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
         'tf_idf_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'w2v_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         # English language with two classes
         'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
@@ -716,6 +757,7 @@ def get_best_mlp_hyperparameters(model_id):
         'position_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
         'tf_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+        'w2v_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         # Turkish language with two classes
         'bow_tur': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'unigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
@@ -724,6 +766,7 @@ def get_best_mlp_hyperparameters(model_id):
         'position_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
         'tf_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+        'w2v_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05}
     }
 
     return switcher.get(model_id, "[MLP] Invalid model id\n")
@@ -816,7 +859,7 @@ if __name__ == '__main__':
     corpus_tur, classes_tur = get_tur_corpus(tur_2_classes_path)
 
     # Get different corpus representations for Serbian corpus with three classses
-    bow_srb_3, unigram_srb_3, bigram_srb_3, bigram_unigram_srb_3, position_srb_3, tf_srb_3, tf_idf_srb_3 = text_preprocessing(corpus_srb_3, 'Serbian_3')
+    bow_srb_3, unigram_srb_3, bigram_srb_3, bigram_unigram_srb_3, position_srb_3, tf_srb_3, tf_idf_srb_3, w2v_srb_3 = text_preprocessing(corpus_srb_3, 'Serbian_3')
 
     # Classification for all corpus representations
     logging.info(' --- Serbian reviews (Bag Of Words Model) for three classes --- \n')
@@ -833,9 +876,11 @@ if __name__ == '__main__':
     classification(tf_srb_3, classes_srb_3, "tf_srb_3")
     logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for three classes --- \n')
     classification(tf_idf_srb_3, classes_srb_3, "tf_idf_srb_3")
+    logging.info(' --- Serbian reviews (Word2Vec Model) for three classes --- \n')
+    classification(w2v_srb_3, classes_srb_3, "w2v_srb_3")
 
     # Get different corpus representations for Serbian corpus with two classses
-    bow_srb_2, unigram_srb_2, bigram_srb_2, bigram_unigram_srb_2, position_srb_2, tf_srb_2, tf_idf_srb_2 = text_preprocessing(corpus_srb_2, 'Serbian_2')
+    bow_srb_2, unigram_srb_2, bigram_srb_2, bigram_unigram_srb_2, position_srb_2, tf_srb_2, tf_idf_srb_2, w2v_srb_2 = text_preprocessing(corpus_srb_2, 'Serbian_2')
 
     # Classification for all corpus representations
     logging.info(' --- Serbian reviews (Bag Of Words Model) for two classes --- \n')
@@ -852,9 +897,11 @@ if __name__ == '__main__':
     classification(tf_srb_2, classes_srb_2, "tf_srb_2")
     logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
     classification(tf_idf_srb_2, classes_srb_2, "tf_idf_srb_2")
+    logging.info(' --- Serbian reviews (Word2Vec Model) for two classes --- \n')
+    classification(w2v_srb_2, classes_srb_2, "w2v_srb_2")
 
     # Get different corpus representations for English corpus with two classses
-    bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng = text_preprocessing(corpus_eng, 'English_2')
+    bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng, w2v_eng = text_preprocessing(corpus_eng, 'English_2')
 
     # Classification for all corpus representations
     logging.info(' --- English reviews (Bag Of Words Model) for two classes --- \n')
@@ -873,9 +920,11 @@ if __name__ == '__main__':
     classification(tf_eng, classes_eng, "tf_eng")
     logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
     classification(tf_idf_eng, classes_eng, "tf_idf_eng")
+    logging.info(' --- English reviews (Word2Vec Model) for two classes --- \n')
+    classification(w2v_eng, classes_eng, "w2v_eng")
 
     # Get different corpus representations for Turkish corpus with two classses
-    bow_tur, unigram_tur, bigram_tur, bigram_unigram_tur, position_tur, tf_tur, tf_idf_tur = text_preprocessing(corpus_tur, 'Turkish_2')
+    bow_tur, unigram_tur, bigram_tur, bigram_unigram_tur, position_tur, tf_tur, tf_idf_tur, w2v_tur = text_preprocessing(corpus_tur, 'Turkish_2')
 
     # Classification for all corpus representations
     logging.info(' --- Turkish reviews (Bag Of Words Model) for two classes --- \n')
@@ -892,3 +941,5 @@ if __name__ == '__main__':
     classification(tf_tur, classes_tur, "tf_tur")
     logging.info(' --- Turkish reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
     classification(tf_idf_tur, classes_tur, "tf_idf_tur")
+    logging.info(' --- Turkish reviews (Word2Vec Model) for two classes --- \n')
+    classification(w2v_tur, classes_tur, "w2v_tur")

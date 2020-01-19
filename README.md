@@ -26,6 +26,7 @@
   - Word position in text model
   - Term frequency model (for unigrams)
   - Term frequency - inverse data frequency model (for unigrams)
+  - Word to vector model
 
 - Additional:
   - Corpuses are cleaned from punctuation and stopwords
@@ -59,6 +60,7 @@
   - cyrtranslit
   - gc
   - TurkishStemmer
+  - gensim
 
 ## Usage:
 - Download the corpuses (unzip if necessary) and locate them in src/data folder
