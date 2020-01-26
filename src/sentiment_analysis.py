@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import cyrtranslit
 import gc
+import matplotlib.pyplot as plt
 from statistics import mean
 from sklearn import model_selection
 from sklearn import svm
@@ -261,7 +262,7 @@ def stemming(corpus, language):
     if language == 'Serbian':
         for document in corpus:
             l = ss.stem_str(document)
-            stemming_list.append("".join(l))
+            stemming_list.append(''.join(l))
     else:
         if language == 'English':
             stemmer = nltk.stem.PorterStemmer()
@@ -276,7 +277,7 @@ def stemming(corpus, language):
             for w in words:
                 l.append(stemmer.stem(w))
                 l.append(' ')
-            stemming_list.append("".join(l))
+            stemming_list.append(''.join(l))
 
     return stemming_list
 
@@ -636,7 +637,7 @@ def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
 
         y_pred = grid.predict(X_test)
 
-    return metrics.classification_report(y_test, y_pred)
+    return metrics.classification_report(y_test, y_pred), metrics.accuracy_score(y_test, y_pred)
 
 def get_best_nb_hyperparameters(model_id):
     '''
@@ -720,7 +721,7 @@ def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
 
         y_pred = grid.predict(X_test)
 
-    return metrics.classification_report(y_test, y_pred)
+    return metrics.classification_report(y_test, y_pred), metrics.accuracy_score(y_test, y_pred)
 
 def get_best_mlp_hyperparameters(model_id):
     '''
@@ -807,7 +808,7 @@ def mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
 
         y_pred = grid.predict(X_test)
 
-    return metrics.classification_report(y_test, y_pred)
+    return metrics.classification_report(y_test, y_pred), metrics.accuracy_score(y_test, y_pred)
 
 def classification(data, classes, model_id):
     '''
@@ -824,16 +825,64 @@ def classification(data, classes, model_id):
 
     X_train, X_test = scaling(X_train, X_test)
 
-    score = svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+    score, accuracy_svm = svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
     logging.info('[SVM] Accuracy: {}\n'.format(score))
 
-    score = nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+    score, accuracy_nb = nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
     logging.info('[NB] Accuracy: {}\n'.format(score))
 
-    score = mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+    score, accuracy_mlp = mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
     logging.info('[MLP] Accuracy: {}\n'.format(score))
 
     gc.collect()
+
+    return accuracy_svm, accuracy_nb, accuracy_mlp
+
+
+def autolabel(rects, axis):
+    '''
+    Helper function for autolabeling.
+
+    '''
+    for rect in rects:
+        h = rect.get_height()
+        axis.text(rect.get_x() + rect.get_width() / 2., 1.05 * h, '%.2f' % float(h), ha='center', va='bottom')
+
+def plot_results(values, xticklabel, x_label):
+    '''
+    Helper function to plot accuracy scores relative to ML algorithms and models generated from specific corpus.
+
+    '''
+    ind = np.arange(len(values))
+    width = 0.2
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    svm_val = [item[0] for item in values]
+    nb_val = [item[1] for item in values]
+    mlp_val = [item[2] for item in values]
+
+    rects1 = ax.bar(ind, svm_val, width, color='r')
+    rects2 = ax.bar(ind + width, nb_val, width, color='g')
+    rects3 = ax.bar(ind + width * 2, mlp_val, width, color='b')
+
+    ax.set_xlabel(x_label)
+    ax.set_ylabel('Accuracy')
+    ax.set_xticks(ind + width)
+    ax.set_xticklabels(xticklabel)
+    ax.legend((rects1[0], rects2[0], rects3[0]), ('SVM', 'NB', 'MLP'))
+
+    autolabel(rects1, ax)
+    autolabel(rects2, ax)
+    autolabel(rects3, ax)
+
+    if not os.path.exists('results'):
+        os.makedirs('results')
+
+    file_name = 'results/' + x_label.replace(' ', '_').lower() + '.pdf'
+    plt.savefig(file_name, format='pdf')
+    plt.draw()
 
 if __name__ == '__main__':
 
@@ -858,88 +907,137 @@ if __name__ == '__main__':
     corpus_eng, classes_eng = get_eng_corpus(eng_2_classes_path)
     corpus_tur, classes_tur = get_tur_corpus(tur_2_classes_path)
 
+    # Init values to store accuracy
+    values_srb_3, values_srb_2, values_eng, values_tur = [], [], [], []
+
     # Get different corpus representations for Serbian corpus with three classses
     bow_srb_3, unigram_srb_3, bigram_srb_3, bigram_unigram_srb_3, position_srb_3, tf_srb_3, tf_idf_srb_3, w2v_srb_3 = text_preprocessing(corpus_srb_3, 'Serbian_3')
 
     # Classification for all corpus representations
     logging.info(' --- Serbian reviews (Bag Of Words Model) for three classes --- \n')
-    classification(bow_srb_3, classes_srb_3, "bow_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_srb_3, classes_srb_3, 'bow_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Unigram Model) for three classes --- \n')
-    classification(unigram_srb_3, classes_srb_3, "unigram_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_srb_3, classes_srb_3, 'unigram_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Bigram Model) for three classes --- \n')
-    classification(bigram_srb_3, classes_srb_3, "bigram_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_srb_3, classes_srb_3, 'bigram_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Bigram + Unigram Model) for three classes --- \n')
-    classification(bigram_unigram_srb_3, classes_srb_3, "bigram_unigram_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_srb_3, classes_srb_3, 'bigram_unigram_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Word Position Model) for three classes --- \n')
-    classification(position_srb_3, classes_srb_3, "position_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_srb_3, classes_srb_3, 'position_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Term Frequency Model) for three classes --- \n')
-    classification(tf_srb_3, classes_srb_3, "tf_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_srb_3, classes_srb_3, 'tf_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for three classes --- \n')
-    classification(tf_idf_srb_3, classes_srb_3, "tf_idf_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_srb_3, classes_srb_3, 'tf_idf_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Word2Vec Model) for three classes --- \n')
-    classification(w2v_srb_3, classes_srb_3, "w2v_srb_3")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_srb_3, classes_srb_3, 'w2v_srb_3')
+    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
 
     # Get different corpus representations for Serbian corpus with two classses
     bow_srb_2, unigram_srb_2, bigram_srb_2, bigram_unigram_srb_2, position_srb_2, tf_srb_2, tf_idf_srb_2, w2v_srb_2 = text_preprocessing(corpus_srb_2, 'Serbian_2')
 
     # Classification for all corpus representations
     logging.info(' --- Serbian reviews (Bag Of Words Model) for two classes --- \n')
-    classification(bow_srb_2, classes_srb_2, "bow_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_srb_2, classes_srb_2, 'bow_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Unigram Model) for two classes --- \n')
-    classification(unigram_srb_2, classes_srb_2, "unigram_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_srb_2, classes_srb_2, 'unigram_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Bigram Model) for two classes --- \n')
-    classification(bigram_srb_2, classes_srb_2, "bigram_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_srb_2, classes_srb_2, 'bigram_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Bigram + Unigram Model) for two classes --- \n')
-    classification(bigram_unigram_srb_2, classes_srb_2, "bigram_unigram_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_srb_2, classes_srb_2, 'bigram_unigram_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Word Position Model) for two classes --- \n')
-    classification(position_srb_2, classes_srb_2, "position_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_srb_2, classes_srb_2, 'position_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Term Frequency Model) for two classes --- \n')
-    classification(tf_srb_2, classes_srb_2, "tf_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_srb_2, classes_srb_2, 'tf_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
-    classification(tf_idf_srb_2, classes_srb_2, "tf_idf_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_srb_2, classes_srb_2, 'tf_idf_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Serbian reviews (Word2Vec Model) for two classes --- \n')
-    classification(w2v_srb_2, classes_srb_2, "w2v_srb_2")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_srb_2, classes_srb_2, 'w2v_srb_2')
+    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
 
     # Get different corpus representations for English corpus with two classses
     bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng, w2v_eng = text_preprocessing(corpus_eng, 'English_2')
 
     # Classification for all corpus representations
     logging.info(' --- English reviews (Bag Of Words Model) for two classes --- \n')
-    classification(bow_eng, classes_eng, "bow_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_eng, classes_eng, 'bow_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Unigram Model) for two classes --- \n')
-    classification(unigram_eng, classes_eng, "unigram_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_eng, classes_eng, 'unigram_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Bigram Model) for two classes --- \n')
-    classification(bigram_eng, classes_eng, "bigram_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_eng, classes_eng, 'bigram_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Bigram + Unigram Model) for two classes --- \n')
-    classification(bigram_unigram_eng, classes_eng, "bigram_unigram_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_eng, classes_eng, 'bigram_unigram_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Part Of Speech Model) for two classes --- \n')
-    classification(pos_tag_eng, classes_eng, "pos_tag_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(pos_tag_eng, classes_eng, 'pos_tag_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Word Position Model) for two classes --- \n')
-    classification(position_eng, classes_eng, "position_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_eng, classes_eng, 'position_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Term Frequency Model) for two classes --- \n')
-    classification(tf_eng, classes_eng, "tf_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_eng, classes_eng, 'tf_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
-    classification(tf_idf_eng, classes_eng, "tf_idf_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_eng, classes_eng, 'tf_idf_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- English reviews (Word2Vec Model) for two classes --- \n')
-    classification(w2v_eng, classes_eng, "w2v_eng")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_eng, classes_eng, 'w2v_eng')
+    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
 
     # Get different corpus representations for Turkish corpus with two classses
     bow_tur, unigram_tur, bigram_tur, bigram_unigram_tur, position_tur, tf_tur, tf_idf_tur, w2v_tur = text_preprocessing(corpus_tur, 'Turkish_2')
 
     # Classification for all corpus representations
     logging.info(' --- Turkish reviews (Bag Of Words Model) for two classes --- \n')
-    classification(bow_tur, classes_tur, "bow_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_tur, classes_tur, 'bow_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Unigram Model) for two classes --- \n')
-    classification(unigram_tur, classes_tur, "unigram_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_tur, classes_tur, 'unigram_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Bigram Model) for two classes --- \n')
-    classification(bigram_tur, classes_tur, "bigram_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_tur, classes_tur, 'bigram_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Bigram + Unigram Model) for two classes --- \n')
-    classification(bigram_unigram_tur, classes_tur, "bigram_unigram_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_tur, classes_tur, 'bigram_unigram_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Word Position Model) for two classes --- \n')
-    classification(position_tur, classes_tur, "position_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_tur, classes_tur, 'position_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Term Frequency Model) for two classes --- \n')
-    classification(tf_tur, classes_tur, "tf_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_tur, classes_tur, 'tf_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
-    classification(tf_idf_tur, classes_tur, "tf_idf_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_tur, classes_tur, 'tf_idf_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
     logging.info(' --- Turkish reviews (Word2Vec Model) for two classes --- \n')
-    classification(w2v_tur, classes_tur, "w2v_tur")
+    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_tur, classes_tur, 'w2v_tur')
+    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+
+    # Plot the accuracy relative to ML algorithms and models generated from specific corpus
+    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    plot_results(values_srb_3, xticklabel, 'Serbian corpus with three classes')
+    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    plot_results(values_srb_2, xticklabel, 'Serbian corpus with two classes')
+    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    plot_results(values_eng, xticklabel, 'English corpus with two classes')
+    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    plot_results(values_tur, xticklabel, 'Turkish corpus with two classes')
+
+    plt.show()
+

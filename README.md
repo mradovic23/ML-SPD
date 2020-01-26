@@ -5,6 +5,7 @@
 - src/helper folder contains all helper functions (stemmer and stopwords for Serbian language)
 - src/test folder contains unit tests for funcionalities in sentiment_analysis.py file
 - src/data folder should contain input data
+- src/results contains accuracy score analysis
 
 ### Corpus representations
 - There are four movie review corpuses
@@ -59,6 +60,7 @@
   - statistics
   - cyrtranslit
   - gc
+  - matplotlib
   - TurkishStemmer
   - gensim
 
