@@ -2,7 +2,7 @@
 
 ## Project structure
 - src/sentiment_analysis.py is the main file
-- src/helper folder contains all helper functions (stemmer and stopwords for Serbian language)
+- src/helper folder contains all helper functions (stemmer, lemma forms, pos tagger, stopwords for Serbian language)
 - src/test folder contains unit tests for funcionalities in sentiment_analysis.py file
 - src/data folder should contain input data
 - src/results contains accuracy score analysis
@@ -16,7 +16,7 @@
   - English corpus: http://www.cs.cornell.edu/people/pabo/movie-review-data/review_polarity.tar.gz
     - positive (1000) and negative (1000) reviews
   - Turkish corpus: src/data/HUMIRSentimentDatasets.csv (considered only movie reviews)
-    - positive and negative reviews (random 3000 reviews out of ~53000)
+    - positive (4500) and negative (4500) reviews (random 9000 reviews out of ~53000)
 
 - Corpuses are represented in different styles:
   - Bag of words (BOW) model
@@ -31,7 +31,7 @@
 
 - Additional:
   - Corpuses are cleaned from punctuation and stopwords
-  - Words are reduced to their root form (stemming)
+  - Words are reduced to their root form (stemming/lemmatization)
   - For ngram models only punctuation cleaning is performed
 
 ### Machine learning techniques
