@@ -531,7 +531,7 @@ def generate_word2vec(corpus):
 
     '''
     all_words = [nltk.word_tokenize(doc) for doc in corpus]
-    w2v_model = Word2Vec(all_words, sg=1)
+    w2v_model = Word2Vec(all_words, sg=1, size=800, iter=30)
 
     model = []
     for c in corpus:
@@ -639,7 +639,7 @@ def cross_validation(model, data, classes):
     return: prediction of how well the model will be trained
 
     '''
-    scores = model_selection.cross_val_score(model, data, classes, cv=10)
+    scores = model_selection.cross_val_score(model, data, classes, cv=10, scoring='accuracy')
     logging.debug('Cross-validated scores: {}\n'.format(scores))
 
     return scores
@@ -671,7 +671,7 @@ def get_best_svm_hyperparameters(model_id):
         'position_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
         'tf_idf_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'w2v_srb_2': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
+        'w2v_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         # English language with two classes
         'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
         'unigram_eng': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
@@ -698,8 +698,8 @@ def get_best_svm_hyperparameters(model_id):
 def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     '''
     Given training and testing dataset and model id, functions creates a Support Vector Machine classifier with best hyperparameters,
-    calculates the average of expected modeling accuracy using 10-cross validation (if '-c' flag is enabled),
     trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
+    If '-c' option is enabled, program calculates the average of expected modeling accuracy using 10-cross validation.
     If '-g' option is enabled, program will first do the grid search analysis with 3-cross validation
     and automatically fit the model with best hyperparameters.
     param input: dataset for training and testing, model id
@@ -712,6 +712,7 @@ def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
         if args['cross_validation'] == True:
             score = cross_validation(clf, data, classes)
             logging.info('[SVM] Expected accuracy: {}\n'.format(mean(score)))
+            return None, mean(score)
 
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
@@ -721,7 +722,7 @@ def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
                       'gamma': [1, 0.1, 0.01, 0.001, 0.0001],
                       'kernel': ['rbf', 'linear']}
 
-        grid = model_selection.GridSearchCV(svm.SVC(), param_grid, refit=True, verbose=3)
+        grid = model_selection.GridSearchCV(svm.SVC(), param_grid, refit=True, verbose=1)
         grid.fit(X_train, y_train)
 
         logging.debug('[SVM] Best grid parameters: {}'.format(grid.best_params_))
@@ -748,7 +749,7 @@ def get_best_nb_hyperparameters(model_id):
         'position_srb_3': {'alpha': 1.5, 'fit_prior': False},
         'tf_srb_3': {'alpha': 1.5, 'fit_prior': False},
         'tf_idf_srb_3': {'alpha': 1.5, 'fit_prior': True},
-        'w2v_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'w2v_srb_3': {'alpha': 0.5, 'fit_prior': False},
         # Serbian language with two classes
         'bow_srb_2': {'alpha': 1.5, 'fit_prior': False},
         'unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
@@ -758,7 +759,7 @@ def get_best_nb_hyperparameters(model_id):
         'position_srb_2': {'alpha': 1.0, 'fit_prior': False},
         'tf_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'w2v_srb_2': {'alpha': 0.5, 'fit_prior': True},
+        'w2v_srb_2': {'alpha': 1.5, 'fit_prior': True},
         # English language with two classes
         'bow_eng': {'alpha': 1.5, 'fit_prior': True},
         'unigram_eng': {'alpha': 1.5, 'fit_prior': True},
@@ -768,7 +769,7 @@ def get_best_nb_hyperparameters(model_id):
         'position_eng': {'alpha': 1.0, 'fit_prior': True},
         'tf_eng': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_eng': {'alpha': 1.5, 'fit_prior': True},
-        'w2v_eng': {'alpha': 0.5, 'fit_prior': False},
+        'w2v_eng': {'alpha': 0.5, 'fit_prior': True},
         # Turkish language with two classes
         'bow_tur': {'alpha': 1.0, 'fit_prior': False},
         'unigram_tur': {'alpha': 1.5, 'fit_prior': True},
@@ -785,8 +786,8 @@ def get_best_nb_hyperparameters(model_id):
 def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     '''
     Given training and testing dataset and model id, functions creates a Naive Bayes classifier with best hyperparameters,
-    calculates the average of expected modeling accuracy using 10-cross validation (if '-c' flag is enabled),
     trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
+    If '-c' option is enabled, program calculates the average of expected modeling accuracy using 10-cross validation.
     If '-g' option is enabled, program will first do the grid search analysis with 3-cross validation
     and automatically fit the model with best hyperparameters.
     param input: dataset for training and testing, model id
@@ -799,6 +800,7 @@ def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
         if args['cross_validation'] == True:
             score = cross_validation(clf, data, classes)
             logging.info('[NB] Expected accuracy: {}\n'.format(mean(score)))
+            return None, mean(score)
 
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
@@ -834,7 +836,7 @@ def get_best_mlp_hyperparameters(model_id):
         'position_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
         'tf_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'tf_idf_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
-        'w2v_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'w2v_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
         # Serbian language with two classes
         'bow_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
         'unigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
@@ -844,7 +846,7 @@ def get_best_mlp_hyperparameters(model_id):
         'position_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         'tf_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
         'tf_idf_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
-        'w2v_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'w2v_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
         # English language with two classes
         'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
@@ -871,8 +873,8 @@ def get_best_mlp_hyperparameters(model_id):
 def mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     '''
     Given training and testing dataset and model id, functions creates a Multi Layer Perceptron classifier with best hyperparameters,
-    calculates the average of expected modeling accuracy using 10-cross validation (if '-c' flag is enabled),
     trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
+    If '-c' option is enabled, program calculates the average of expected modeling accuracy using 10-cross validation.
     If '-g' option is enabled, program will first do the grid search analysis with 3-cross validation
     and automatically fit the model with best hyperparameters.
     param input: dataset for training and testing, model id
@@ -886,6 +888,7 @@ def mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
         if args['cross_validation'] == True:
             score = cross_validation(clf, data, classes)
             logging.info('[MLP] Expected accuracy: {}\n'.format(mean(score)))
+            return None, mean(score)
 
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
@@ -920,15 +923,19 @@ def classification(data, classes, model_id):
     X_train, X_test, y_train, y_test = model_selection.train_test_split(data, classes, test_size=test_size)
 
     X_train, X_test = scaling(X_train, X_test)
+    if args['cross_validation'] == True:
+        data = preprocessing.minmax_scale(data)
 
-    score, accuracy_svm = svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
-    logging.info('[SVM] Accuracy: {}\n'.format(score))
+    score_svm, accuracy_svm = svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
 
-    score, accuracy_nb = nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
-    logging.info('[NB] Accuracy: {}\n'.format(score))
+    score_nb, accuracy_nb = nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
 
-    score, accuracy_mlp = mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
-    logging.info('[MLP] Accuracy: {}\n'.format(score))
+    score_mlp, accuracy_mlp = mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
+
+    if args['cross_validation'] == False:
+        logging.info('[SVM] Accuracy: {}\n'.format(score_svm))
+        logging.info('[NB] Accuracy: {}\n'.format(score_nb))
+        logging.info('[MLP] Accuracy: {}\n'.format(score_mlp))
 
     gc.collect()
 
@@ -1132,14 +1139,13 @@ if __name__ == '__main__':
     values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
 
     # Plot the accuracy relative to ML algorithms and models generated from specific corpus
-    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
     plot_results(values_srb_3, xticklabel, 'Serbian corpus with three classes')
-    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
     plot_results(values_srb_2, xticklabel, 'Serbian corpus with two classes')
-    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
     plot_results(values_eng, xticklabel, 'English corpus with two classes')
-    xticklabel = ('BOW', 'Bigram', 'Unigram', 'Bigram + Unigram', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
     plot_results(values_tur, xticklabel, 'Turkish corpus with two classes')
 
     plt.show()
-
