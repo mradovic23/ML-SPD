@@ -21,7 +21,6 @@ from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from helper import serbian_stemmer as ss
 from helper import serbian_stopwords as ssw
 from TurkishStemmer import TurkishStemmer
 from gensim.models import Word2Vec
@@ -42,6 +41,14 @@ def get_parser():
                         help='Add cross validation', action='store_true')
     parser.add_argument('-g', '--grid_search', required=False,
                         help='Add grid search for hyperparameter tuning', action='store_true')
+    parser.add_argument('-s3', '--serbian_3', required=False,
+                        help='Run app for Serbian corpus with three classes', action='store_true')
+    parser.add_argument('-s2', '--serbian_2', required=False,
+                        help='Run app for Serbian corpus with two classes', action='store_true')
+    parser.add_argument('-e2', '--english_2', required=False,
+                        help='Run app for English corpus with two classes', action='store_true')
+    parser.add_argument('-t2', '--turkish_2', required=False,
+                        help='Run app for Turkish corpus with two classes', action='store_true')
     arguments = vars(parser.parse_args())
 
     return arguments
@@ -214,11 +221,10 @@ def get_tur_corpus(path):
         logging.ERROR('Could not open: {}', path)
         sys.exit()
 
-    data = {'Text': corpus, 'Rating': classes}
+    # Get 4000 positive nad 4000 negative movie reviews (since it's a large corpus)
+    data = {'Text': corpus[9350:17350], 'Rating': classes[9350:17350]}
     data = pd.DataFrame(data)
 
-    # Get 4500 positive nad 4500 negative movie reviews (since it's a large corpus)
-    data = data[8850:17850]
     data.Text = lower(data.Text)
     data.Rating = upper(data.Rating)
 
@@ -226,8 +232,8 @@ def get_tur_corpus(path):
 
 def remove_punctuation(corpus, language):
     '''
-    Given corpus, function removes punctuation in all corpus documents.
-    param input: corpus
+    Given corpus and lanuage indicator, function removes punctuation in all corpus documents.
+    param input: corpus, language indicator
     return: corpus w/o punctuation
 
     '''
@@ -244,8 +250,8 @@ def remove_punctuation(corpus, language):
 
 def remove_stopwords(corpus, language):
     '''
-    Given corpus, function removes stopwords in all corpus documents for the selected language.
-    param input: corpus, language
+    Given corpus and language indicator, function removes stopwords in all corpus documents for the selected language.
+    param input: corpus, language indicator
     return: corpus w/o stopwords
 
     '''
@@ -304,7 +310,7 @@ def get_srb_pos_tagger_and_lemma():
 
 def srb_root_form(document):
     '''
-    Given document, function replaces words with lemmatization forms (if exists), otherwise is stemming performed.
+    Given document, function replaces words with lemmatization forms.
     param input: document
     return: root form of the document
 
@@ -316,8 +322,6 @@ def srb_root_form(document):
     for w in words:
         if w in lemma_dict.keys():
             cleaned_text.append(lemma_dict[w])
-        else:
-            cleaned_text.append(ss.stem_str(w))
         cleaned_text.append(' ')
 
     return cleaned_text
@@ -326,18 +330,19 @@ def word_normalization(corpus, language):
     '''
     Given corpus and language indicator, function is doing 'word normalization', ie. reducing inflection in words to their root forms
     for all words across all documents in the corpus.
-    For Serbian movies, it is done by using custom serbian stemmer from: https://github.com/nikolamilosevic86/SerbianStemmer.
+    For Serbian movies, it is done by using custom serbian lemmatized dictionary: src/helper/serbian_pos_tagger_and_lemma.
+    Serbian stemmer can be found here: https://github.com/nikolamilosevic86/SerbianStemmer.
     For English movies, it is done by using existing stemmer from nltk - Porter Stemmer.
     For Turkish movies, it is done by using existing TurkishStemmer.
     param input: corpus, language indicator
     return: stemmed corpus
 
     '''
-    stemming_list = []
+    final_list = []
     if language == 'Serbian':
         for document in corpus:
             l = srb_root_form(document)
-            stemming_list.append(''.join(l))
+            final_list.append(''.join(l))
     else:
         if language == 'English':
             stemmer = nltk.stem.PorterStemmer()
@@ -352,31 +357,33 @@ def word_normalization(corpus, language):
             for w in words:
                 l.append(stemmer.stem(w))
                 l.append(' ')
-            stemming_list.append(''.join(l))
+            final_list.append(''.join(l))
 
-    return stemming_list
+    return final_list
 
-def generate_ngrams(corpus, n):
+def generate_ngrams(corpus_train, corpus_test, n):
     '''
-    Given corpus and number n, function extracts all ngrams from all files in corpus.
+    Given train and test corpus and number n, function extracts all ngrams from all files in corpus.
     For n = (1, 1) this function creates a unigram model (or bag of words model).
     For n = (2, 2) this function creates a bigram model.
     For n = (1, 2) this function creates a bigram + unigram model.
-    param input: corpus, number n
-    return: vector of ngrams
+    param input: train and test corpus, number n
+    return: vector of ngrams for train and test corpus
 
     '''
     vectorizer = CountVectorizer(ngram_range=n, max_features=100000)
-    c = vectorizer.fit_transform(corpus)
+    vectorizer.fit(corpus_train)
+    train = vectorizer.transform(corpus_train)
+    test = vectorizer.transform(corpus_test)
 
-    return c.toarray()
+    return train.toarray(), test.toarray()
 
 def get_part_of_speech_words(corpus, language):
     '''
-    Given corpus and language, function uses POS tagger for tagging all words in corpus.
+    Given corpus and language indicator, function uses POS tagger for tagging all words in corpus.
     For Serbian language, it is done by using custom serbian POS tagger for given corpus.
     For English language, it is done by using existing POS tagger from nltk.
-    param input: corpus, language
+    param input: corpus, language indicator
     return: tagged words (tuple shape (word, tag))
 
     '''
@@ -416,7 +423,7 @@ def create_vocabulary(corpus):
 
     return vocabulary
 
-def create_model(corpus, vocabulary):
+def create_vector_model(corpus, vocabulary):
     '''
     Given corpus and vocabulary, functions creates a vector of token counts.
     param input: list of tagged words and tagged vocabulary
@@ -434,18 +441,21 @@ def create_model(corpus, vocabulary):
 
     return model
 
-def part_of_speech_tagging(corpus, language):
+def part_of_speech_tagging(corpus_train, corpus_test, language):
     '''
-    Given corpus and language, function extracts tagged words for the specific language, creates a vocabulary and appropriate model for ML algorithms.
-    param input: corpus, language
-    return: appropriate model for ML algorithms
+    Given train and test corpus and language indicator, function extracts tagged words for the specific language,
+    creates a vocabulary and appropriate model for ML algorithms. Test model is built according to train model.
+    param input: train and test corpus, language indicator
+    return: appropriate models for ML algorithms
 
     '''
-    tags = get_part_of_speech_words(corpus, language)
-    vocabulary = create_vocabulary(tags)
-    pos_tag = create_model(tags, vocabulary)
+    tags_train = get_part_of_speech_words(corpus_train, language)
+    tags_test = get_part_of_speech_words(corpus_test, language)
+    vocabulary = create_vocabulary(tags_train)
+    pos_tag_train = create_vector_model(tags_train, vocabulary)
+    pos_tag_test = create_vector_model(tags_test, vocabulary)
 
-    return pos_tag
+    return pos_tag_train, pos_tag_test
 
 def get_word_position(corpus):
     '''
@@ -468,33 +478,37 @@ def get_word_position(corpus):
 
     return tags
 
-def word_position_tagging(corpus):
+def word_position_tagging(corpus_train, corpus_test):
     '''
-    Given corpus, function extracts all tagged words, creates a vocabulary and appropriate model for ML algorithms.
-    param input: corpus
-    return: appropriate model for ML algorithms
+    Given train and test corpus, function extracts all tagged words, creates a vocabulary
+    and appropriate model for ML algorithms. Test model is built according to train model.
+    param input: train and test corpus
+    return: appropriate models for ML algorithms
 
     '''
-    tags = get_word_position(corpus)
-    vocabulary = create_vocabulary(tags)
-    word_position_tag = create_model(tags, vocabulary)
+    tags_train = get_word_position(corpus_train)
+    tags_test = get_word_position(corpus_test)
+    vocabulary = create_vocabulary(tags_train)
+    word_position_tag_train = create_vector_model(tags_train, vocabulary)
+    word_position_tag_test = create_vector_model(tags_test, vocabulary)
 
-    return word_position_tag
+    return word_position_tag_train, word_position_tag_test
 
-def compute_tf(corpus):
+def compute_tf(corpus_train, corpus_test):
     '''
-    Given corpus, function calculates frequency of every word in all documents in the corpus and returns a matrix of tf.
-    param input: corpus
-    return: matrix of term frequencies
+    Given train and test corpus, function calculates frequency of every word in all documents in the corpus and returns a matrix of tf.
+    Test model is built according to train model.
+    param input: train and test corpus
+    return: matrix of term frequencies (for train and test corpus)
 
     '''
     # Create vocabulary of the entire corpus
     vectorizer = CountVectorizer()
-    c = vectorizer.fit_transform(corpus)
+    vectorizer.fit_transform(corpus_train)
     vocabulary = vectorizer.get_feature_names()
 
-    model = np.zeros((len(corpus), len(vocabulary)))
-    for i, c in enumerate(corpus):
+    train = np.zeros((len(corpus_train), len(vocabulary)))
+    for i, c in enumerate(corpus_train):
         # Extract words
         words = nltk.word_tokenize(c)
         document = np.zeros(len(vocabulary))
@@ -506,36 +520,55 @@ def compute_tf(corpus):
             index = vocabulary.index(w) if w in vocabulary else -1
             if index != -1:
                 document[index] += 1 / doc_vocabulary_length
-        model[i] = document
+        train[i] = document
 
-    return model
+    test = np.zeros((len(corpus_test), len(vocabulary)))
+    for i, c in enumerate(corpus_test):
+        # Extract words
+        words = nltk.word_tokenize(c)
+        document = np.zeros(len(vocabulary))
+        # Create vocabulary of the specific document
+        doc = vectorizer.fit_transform([c])
+        doc_vocabulary = vectorizer.get_feature_names()
+        doc_vocabulary_length = len(doc_vocabulary)
+        for w in words:
+            index = vocabulary.index(w) if w in vocabulary else -1
+            if index != -1:
+                document[index] += 1 / doc_vocabulary_length
+        test[i] = document
 
-def compute_tf_idf(corpus):
+    return train, test
+
+def compute_tf_idf(corpus_train, corpus_test):
     '''
-    Given corpus, function calculates the weight of rare words across all documents in the corpus and returns a matrix of tf-idf.
-    param input: corpus
-    return: matrix of term frequencies - inverse data frequencies
+    Given train and test corpus, function calculates the weight of rare words across all documents in the corpus and returns a matrix of tf-idf.
+    Test model is built according to train model.
+    param input: train and test corpus
+    return: matrix of term frequencies - inverse data frequencies (for train and test corpus)
 
     '''
     vectorizer = TfidfVectorizer()
-    c = vectorizer.fit_transform(corpus)
+    vectorizer.fit(corpus_train)
+    train = vectorizer.transform(corpus_train)
+    test = vectorizer.transform(corpus_test)
 
-    return c.toarray()
+    return train.toarray(), test.toarray()
 
-def generate_word2vec(corpus):
+def generate_word2vec(corpus_train, corpus_test):
     '''
-    Given corpus, function first creates the word to vector model from all words in all documents and then
+    Given train and test corpus, function first creates the word to vector model from all words in all documents and then
     creates a suitable model that can be used for ML training by averaging all words in single document.
-    param input: corpus
-    return: word to vector model
+    Test model is built according to train model.
+    param input: train and test corpus
+    return: word to vector models (for train and test corpus)
 
     '''
-    all_words = [nltk.word_tokenize(doc) for doc in corpus]
+    all_words = [nltk.word_tokenize(doc) for doc in corpus_train]
     w2v_model = Word2Vec(all_words, sg=1, size=800, iter=30)
 
-    model = []
-    for c in corpus:
-        temp = pd.DataFrame()
+    train, test = [], []
+    for c in corpus_train:
+        temp = pd.DataFrame(np.zeros((1, len(w2v_model.wv.vocab))))
         for w in nltk.word_tokenize(c):
             try:
                 word_vec = w2v_model[w]
@@ -543,80 +576,135 @@ def generate_word2vec(corpus):
             except:
                 pass
         temp = temp.mean()
-        model.append(temp)
+        train.append(temp)
 
-    return model
+    for c in corpus_test:
+        temp = pd.DataFrame(np.zeros((1, len(w2v_model.wv.vocab))))
+        for w in nltk.word_tokenize(c):
+            try:
+                word_vec = w2v_model[w]
+                temp = temp.append(pd.Series(word_vec), ignore_index=True)
+            except:
+                pass
+        temp = temp.mean()
+        test.append(temp)
+
+    return train, test
 
 def text_preprocessing(corpus, language):
     '''
-    Given corpus and language indicator, function first removes punctuation and stopwords,
-    stemms words and then creates different types of corpus representations:
-    - bag of words model
+    Given corpus and language indicator, function lemmatizes/stemms words and removes punctuation and stopwords.
+    param input: corpus, language indicator
+    return: corpus with just punctuation removal (needed for n-gram models) and cleaned corpus
+
+    '''
+    language = language[:-2]
+
+    # Word normalization
+    normalized_corpus = word_normalization(corpus, language)
+
+    # Remove punctuation
+    no_punctuation_corpus = remove_punctuation(normalized_corpus, language)
+
+    # Remove stopwords
+    cleaned_corpus = remove_stopwords(no_punctuation_corpus, language)
+
+    # Corpus with just punctuation removal
+    no_punctuation_corpus = remove_punctuation(corpus, language)
+
+    return no_punctuation_corpus, cleaned_corpus
+
+def create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpus_test, language):
+    '''
+    Given corpuses and laguage indicator, function creates different types of corpus representations:
     - unigram model
     - bigram model
     - bigram + unigram model
+    - bag of words model
     - part of speech model
     - word position model
     - term frequency model
     - term frequency - inverse data frequency model
     - word to vector model
-    param input: corpus, language indicator
-    return: bag of words model, unigram model, bigram model, bigram + unigram model, part of speech model,
+    Test models are built according to train models.
+    param input: corpuses, language indicator
+    return: list of train and test models - unigram model, bigram model, bigram + unigram model, bag of words model, part of speech model,
             word position model, term frequency model, term frequency - inverse data frequency model, word to vector model
 
     '''
     num_of_classes = int(language[-1])
     language = language[:-2]
 
-    # Remove punctuation
-    no_punctuation_corpus = remove_punctuation(corpus, language)
-
-    # Remove stopwords
-    no_stopwords_corpus = remove_stopwords(no_punctuation_corpus, language)
-
-    # Word normalization
-    cleaned_corpus = word_normalization(no_stopwords_corpus, language)
-
-    # Get the bag of words model
-    bag_of_words_model = generate_ngrams(cleaned_corpus, (1, 1))
-    logging.debug('Bag of words model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bag_of_words_model))
+    # List for storing all models
+    list_of_train_models = []
+    list_of_test_models = []
 
     # Get the unigram model
-    unigram_model = generate_ngrams(no_punctuation_corpus, (1, 1))
-    logging.debug('Unigram model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, unigram_model))
+    unigram_model_train, unigram_model_test = generate_ngrams(corpus_train, corpus_test, (1, 1))
+    logging.debug('Unigram train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, unigram_model_train))
+    logging.debug('Unigram test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, unigram_model_test))
+    list_of_train_models.append(unigram_model_train)
+    list_of_test_models.append(unigram_model_test)
 
     # Get the bigram model
-    bigram_model = generate_ngrams(no_punctuation_corpus, (2, 2))
-    logging.debug('Bigram model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_model))
+    bigram_model_train, bigram_model_test = generate_ngrams(corpus_train, corpus_test, (2, 2))
+    logging.debug('Bigram train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_model_train))
+    logging.debug('Bigram test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_model_test))
+    list_of_train_models.append(bigram_model_train)
+    list_of_test_models.append(bigram_model_test)
 
     # Get the bigram + unigram model
-    bigram_unigram_model = generate_ngrams(no_punctuation_corpus, (1, 2))
-    logging.debug('Bigram + unigram model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_unigram_model))
+    bigram_unigram_model_train, bigram_unigram_model_test = generate_ngrams(corpus_train, corpus_test, (1, 2))
+    logging.debug('Bigram + unigram train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_unigram_model_train))
+    logging.debug('Bigram + unigram test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bigram_unigram_model_test))
+    list_of_train_models.append(bigram_unigram_model_train)
+    list_of_test_models.append(bigram_unigram_model_test)
 
-    # Get the word position model
-    word_position_model = word_position_tagging(cleaned_corpus)
-    logging.debug('Word position model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, word_position_model))
-
-    # Get the term frequency model from bag of words model
-    tf_model = compute_tf(cleaned_corpus)
-    logging.debug('Term frequency model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_model))
-
-    # Get the term frequency - inverse data frequency model
-    tf_idf_model = compute_tf_idf(cleaned_corpus)
-    logging.debug('Term frequency - inverse data frequency model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model))
-
-    # Get the word to vector model
-    w2v_model = generate_word2vec(cleaned_corpus)
-    logging.debug('Word to vector model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, w2v_model))
+    # Get the bag of words model
+    bag_of_words_model_train, bag_of_words_model_test = generate_ngrams(cleaned_corpus_train, cleaned_corpus_test, (1, 1))
+    logging.debug('Bag of words train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bag_of_words_model_train))
+    logging.debug('Bag of words test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, bag_of_words_model_test))
+    list_of_train_models.append(bag_of_words_model_train)
+    list_of_test_models.append(bag_of_words_model_test)
 
     # Get the part of speech tag
     # TODO: change when POS for Turkish corpus is implemented
     if language == 'English' or language == 'Serbian':
-        pos_tag_model = part_of_speech_tagging(cleaned_corpus, language)
-        logging.debug('POS tag model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, pos_tag_model))
-        return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, pos_tag_model, word_position_model, tf_model, tf_idf_model, w2v_model
+        pos_tag_model_train, pos_tag_model_test = part_of_speech_tagging(cleaned_corpus_train, cleaned_corpus_test, language)
+        logging.debug('POS tag train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, pos_tag_model_train))
+        logging.debug('POS tag test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, pos_tag_model_test))
+        list_of_train_models.append(pos_tag_model_train)
+        list_of_test_models.append(pos_tag_model_test)
 
-    return bag_of_words_model, unigram_model, bigram_model, bigram_unigram_model, word_position_model, tf_model, tf_idf_model, w2v_model
+    # Get the word position model
+    word_position_model_train, word_position_model_test = word_position_tagging(cleaned_corpus_train, cleaned_corpus_test)
+    logging.debug('Word position train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, word_position_model_train))
+    logging.debug('Word position test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, word_position_model_test))
+    list_of_train_models.append(word_position_model_train)
+    list_of_test_models.append(word_position_model_test)
+
+    # Get the term frequency model from bag of words model
+    tf_model_train, tf_model_test = compute_tf(cleaned_corpus_train, cleaned_corpus_test)
+    logging.debug('Term frequency train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_model_train))
+    logging.debug('Term frequency test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_model_test))
+    list_of_train_models.append(tf_model_train)
+    list_of_test_models.append(tf_model_test)
+
+    # Get the term frequency - inverse data frequency model
+    tf_idf_model_train, tf_idf_model_test = compute_tf_idf(cleaned_corpus_train, cleaned_corpus_test)
+    logging.debug('Term frequency - inverse data frequency train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model_train))
+    logging.debug('Term frequency - inverse data frequency test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model_test))
+    list_of_train_models.append(tf_idf_model_train)
+    list_of_test_models.append(tf_idf_model_test)
+
+    # Get the word to vector model
+    w2v_model_train, w2v_model_test = generate_word2vec(cleaned_corpus_train, cleaned_corpus_test)
+    logging.debug('Word to vector train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, w2v_model_train))
+    logging.debug('Word to vector test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, w2v_model_test))
+    list_of_train_models.append(w2v_model_train)
+    list_of_test_models.append(w2v_model_test)
+
+    return list_of_train_models, list_of_test_models
 
 def scaling(X_train, X_test):
     '''
@@ -653,40 +741,40 @@ def get_best_svm_hyperparameters(model_id):
     '''
     switcher = {
         # Serbian language with three classes
+        'unigram_srb_3': {'C': 1000, 'gamma': 1, 'kernel': 'linear'},
+        'bigram_srb_3': {'C': 1, 'gamma': 0.01, 'kernel': 'linear'},
+        'bigram_unigram_srb_3': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
         'bow_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
-        'unigram_srb_3': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'bigram_srb_3': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
-        'bigram_unigram_srb_3': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'pos_tag_srb_3': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
-        'position_srb_3': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'tf_srb_3': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'tf_idf_srb_3': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'w2v_srb_3': {'C': 1, 'gamma': 0.1, 'kernel': 'rbf'},
+        'pos_tag_srb_3': {'C': 100, 'gamma': 0.01, 'kernel': 'rbf'},
+        'position_srb_3': {'C': 0.1, 'gamma': 0.01, 'kernel': 'linear'},
+        'tf_srb_3': {'C': 100, 'gamma': 0.1, 'kernel': 'linear'},
+        'tf_idf_srb_3': {'C': 1000, 'gamma': 0.01, 'kernel': 'rbf'},
+        'w2v_srb_3': {'C': 10, 'gamma': 0.1, 'kernel': 'rbf'},
         # Serbian language with two classes
-        'bow_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'unigram_srb_2': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_srb_2': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bigram_unigram_srb_2': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'pos_tag_srb_2': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'position_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'tf_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'tf_idf_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'w2v_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'unigram_srb_2': {'C': 100, 'gamma': 0.1, 'kernel': 'linear'},
+        'bigram_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
+        'bigram_unigram_srb_2': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
+        'bow_srb_2': {'C': 100, 'gamma': 0.001, 'kernel': 'linear'},
+        'pos_tag_srb_2': {'C': 100, 'gamma': 0.1, 'kernel': 'linear'},
+        'position_srb_2': {'C': 0.1, 'gamma': 0.0001, 'kernel': 'linear'},
+        'tf_srb_2': {'C': 10, 'gamma': 0.01, 'kernel': 'linear'},
+        'tf_idf_srb_2': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'w2v_srb_2': {'C': 100, 'gamma': 0.1, 'kernel': 'rbf'},
         # English language with two classes
-        'bow_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
-        'unigram_eng': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
-        'bigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'bigram_unigram_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'pos_tag_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'position_eng': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'tf_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'tf_idf_eng': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
-        'w2v_eng': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'},
+        'unigram_eng': {'C': 0.1, 'gamma': 0.001, 'kernel': 'linear'},
+        'bigram_eng': {'C': 10, 'gamma': 0.001, 'kernel': 'linear'},
+        'bigram_unigram_eng': {'C': 100, 'gamma': 0.01, 'kernel': 'linear'},
+        'bow_eng': {'C': 10, 'gamma': 1, 'kernel': 'linear'},
+        'pos_tag_eng': {'C': 0.1, 'gamma': 0.001, 'kernel': 'linear'},
+        'position_eng': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'tf_eng': {'C': 10, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_idf_eng': {'C': 1000, 'gamma': 0.01, 'kernel': 'rbf'},
+        'w2v_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         # Turkish language with two classes
-        'bow_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'unigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'bigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'bigram_unigram_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
+        'bow_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         'position_tur': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
         'tf_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
         'tf_idf_tur': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
@@ -695,7 +783,7 @@ def get_best_svm_hyperparameters(model_id):
 
     return switcher.get(model_id, '[SVM] Invalid model id\n')
 
-def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
+def svm_classifier(X_train, X_test, y_train, y_test, model_id):
     '''
     Given training and testing dataset and model id, functions creates a Support Vector Machine classifier with best hyperparameters,
     trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
@@ -706,29 +794,30 @@ def svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     return: score between predicted and test dataset
 
     '''
-    if args['grid_search'] == False:
-        hyperparam_list = get_best_svm_hyperparameters(model_id)
-        clf = svm.SVC(C=hyperparam_list['C'], gamma=hyperparam_list['gamma'], kernel=hyperparam_list['kernel'])
-        if args['cross_validation'] == True:
-            score = cross_validation(clf, data, classes)
-            logging.info('[SVM] Expected accuracy: {}\n'.format(mean(score)))
-            return None, mean(score)
-
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
-
-    else:
+    clf = None
+    if args['grid_search'] == True:
         param_grid = {'C': [0.1, 1, 10, 100, 1000],
                       'gamma': [1, 0.1, 0.01, 0.001, 0.0001],
                       'kernel': ['rbf', 'linear']}
 
-        grid = model_selection.GridSearchCV(svm.SVC(), param_grid, refit=True, verbose=1)
-        grid.fit(X_train, y_train)
+        clf = model_selection.RandomizedSearchCV(svm.SVC(), param_grid, refit=True, verbose=1, cv=5)
+        clf.fit(X_train, y_train)
 
-        logging.debug('[SVM] Best grid parameters: {}'.format(grid.best_params_))
-        logging.debug('[SVM] Best grid estimator: {}'.format(grid.best_estimator_))
+        logging.debug('[SVM] Best grid parameters: {}'.format(clf.best_params_))
+        logging.debug('[SVM] Best grid estimator: {}'.format(clf.best_estimator_))
 
-        y_pred = grid.predict(X_test)
+        y_pred = clf.predict(X_test)
+
+    else:
+        hyperparam_list = get_best_svm_hyperparameters(model_id)
+        clf = svm.SVC(C=hyperparam_list['C'], gamma=hyperparam_list['gamma'], kernel=hyperparam_list['kernel'])
+
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+
+    if args['cross_validation'] == True:
+        score = cross_validation(clf, X_train, y_train)
+        logging.info('[SVM] Validity error: {}\n'.format(mean(score)))
 
     return metrics.classification_report(y_test, y_pred), metrics.accuracy_score(y_test, y_pred)
 
@@ -741,40 +830,40 @@ def get_best_nb_hyperparameters(model_id):
     '''
     switcher = {
         # Serbian language with three classes
-        'bow_srb_3': {'alpha': 1.5, 'fit_prior': True},
-        'unigram_srb_3': {'alpha': 1.5, 'fit_prior': False},
-        'bigram_srb_3': {'alpha': 1.0, 'fit_prior': False},
-        'bigram_unigram_srb_3': {'alpha': 1.0, 'fit_prior': True},
+        'unigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_srb_3': {'alpha': 1.0, 'fit_prior': True},
+        'bigram_unigram_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'bow_srb_3': {'alpha': 1.5, 'fit_prior': False},
         'pos_tag_srb_3': {'alpha': 1.5, 'fit_prior': True},
-        'position_srb_3': {'alpha': 1.5, 'fit_prior': False},
-        'tf_srb_3': {'alpha': 1.5, 'fit_prior': False},
+        'position_srb_3': {'alpha': 1.5, 'fit_prior': True},
+        'tf_srb_3': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_srb_3': {'alpha': 1.5, 'fit_prior': True},
-        'w2v_srb_3': {'alpha': 0.5, 'fit_prior': False},
+        'w2v_srb_3': {'alpha': 0.5, 'fit_prior': True},
         # Serbian language with two classes
-        'bow_srb_2': {'alpha': 1.5, 'fit_prior': False},
         'unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'bigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_srb_2': {'alpha': 1.0, 'fit_prior': True},
         'bigram_unigram_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'bow_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'pos_tag_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'position_srb_2': {'alpha': 1.0, 'fit_prior': False},
+        'position_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'tf_srb_2': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_srb_2': {'alpha': 1.5, 'fit_prior': True},
-        'w2v_srb_2': {'alpha': 1.5, 'fit_prior': True},
+        'w2v_srb_2': {'alpha': 0.5, 'fit_prior': True},
         # English language with two classes
-        'bow_eng': {'alpha': 1.5, 'fit_prior': True},
         'unigram_eng': {'alpha': 1.5, 'fit_prior': True},
-        'bigram_eng': {'alpha': 1.5, 'fit_prior': True},
+        'bigram_eng': {'alpha': 1.0, 'fit_prior': True},
         'bigram_unigram_eng': {'alpha': 1.5, 'fit_prior': True},
-        'pos_tag_eng': {'alpha': 1.0, 'fit_prior': True},
-        'position_eng': {'alpha': 1.0, 'fit_prior': True},
+        'bow_eng': {'alpha': 1.5, 'fit_prior': True},
+        'pos_tag_eng': {'alpha': 1.5, 'fit_prior': True},
+        'position_eng': {'alpha': 1.5, 'fit_prior': True},
         'tf_eng': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_eng': {'alpha': 1.5, 'fit_prior': True},
         'w2v_eng': {'alpha': 0.5, 'fit_prior': True},
         # Turkish language with two classes
-        'bow_tur': {'alpha': 1.0, 'fit_prior': False},
         'unigram_tur': {'alpha': 1.5, 'fit_prior': True},
         'bigram_tur': {'alpha': 1.5, 'fit_prior': True},
         'bigram_unigram_tur': {'alpha': 1.5, 'fit_prior': True},
+        'bow_tur': {'alpha': 1.0, 'fit_prior': False},
         'position_tur': {'alpha': 1.0, 'fit_prior': True},
         'tf_tur': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_tur': {'alpha': 1.5, 'fit_prior': True},
@@ -783,7 +872,7 @@ def get_best_nb_hyperparameters(model_id):
 
     return switcher.get(model_id, '[NB] Invalid model id\n')
 
-def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
+def nb_classifier(X_train, X_test, y_train, y_test, model_id):
     '''
     Given training and testing dataset and model id, functions creates a Naive Bayes classifier with best hyperparameters,
     trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
@@ -794,28 +883,29 @@ def nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     return: score between predicted and test dataset
 
     '''
-    if args['grid_search'] == False:
+    clf = None
+    if args['grid_search'] == True:
+        param_grid = {'alpha': [0.5, 1.0, 1.5],
+                      'fit_prior': [True, False]}
+
+        clf = model_selection.RandomizedSearchCV(naive_bayes.MultinomialNB(), param_grid, refit=True, verbose=1, cv=5)
+        clf.fit(X_train, y_train)
+
+        logging.debug('[NB] Best grid parameters: {}'.format(clf.best_params_))
+        logging.debug('[NB] Best grid estimator: {}'.format(clf.best_estimator_))
+
+        y_pred = clf.predict(X_test)
+
+    else:
         hyperparam_list = get_best_nb_hyperparameters(model_id)
         clf = naive_bayes.MultinomialNB(alpha=hyperparam_list['alpha'], fit_prior=hyperparam_list['fit_prior'])
-        if args['cross_validation'] == True:
-            score = cross_validation(clf, data, classes)
-            logging.info('[NB] Expected accuracy: {}\n'.format(mean(score)))
-            return None, mean(score)
 
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
 
-    else:
-        param_grid = {'alpha': [0.5, 1.0, 1.5],
-                      'fit_prior': [True, False]}
-
-        grid = model_selection.GridSearchCV(naive_bayes.MultinomialNB(), param_grid, refit=True, verbose=3)
-        grid.fit(X_train, y_train)
-
-        logging.debug('[NB] Best grid parameters: {}'.format(grid.best_params_))
-        logging.debug('[NB] Best grid estimator: {}'.format(grid.best_estimator_))
-
-        y_pred = grid.predict(X_test)
+    if args['cross_validation'] == True:
+        score = cross_validation(clf, X_train, y_train)
+        logging.info('[NB] Validity error: {}\n'.format(mean(score)))
 
     return metrics.classification_report(y_test, y_pred), metrics.accuracy_score(y_test, y_pred)
 
@@ -828,40 +918,40 @@ def get_best_mlp_hyperparameters(model_id):
     '''
     switcher = {
         # Serbian language with three classes
-        'bow_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'unigram_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
-        'bigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
-        'bigram_unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'pos_tag_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
-        'position_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'tf_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'tf_idf_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
-        'w2v_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'bigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'bigram_unigram_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'bow_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'pos_tag_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'position_srb_3': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'tf_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'tf_idf_srb_3': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
+        'w2v_srb_3': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
         # Serbian language with two classes
-        'bow_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
-        'unigram_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'bigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'unigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'bigram_srb_2': {'hidden_layer_sizes': (100), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
         'bigram_unigram_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'pos_tag_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'position_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
-        'tf_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
-        'tf_idf_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
-        'w2v_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.05},
+        'bow_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'pos_tag_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'position_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'tf_srb_2': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'tf_idf_srb_2': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'w2v_srb_2': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
         # English language with two classes
-        'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bigram_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
-        'bigram_unigram_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'pos_tag_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'position_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
-        'tf_eng': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
-        'tf_idf_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
-        'w2v_eng': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
+        'unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+        'bigram_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'bigram_unigram_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bow_eng': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
+        'pos_tag_eng': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'position_eng': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'tf_eng': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'tf_idf_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
+        'w2v_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
         # Turkish language with two classes
-        'bow_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.0001},
         'unigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
         'bigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
         'bigram_unigram_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
+        'bow_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.0001},
         'position_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
         'tf_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
         'tf_idf_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
@@ -870,7 +960,7 @@ def get_best_mlp_hyperparameters(model_id):
 
     return switcher.get(model_id, '[MLP] Invalid model id\n')
 
-def mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
+def mlp_classifier(X_train, X_test, y_train, y_test, model_id):
     '''
     Given training and testing dataset and model id, functions creates a Multi Layer Perceptron classifier with best hyperparameters,
     trains the model using the training set, predicts the response for the test dataset and returns the score between predicted and test dataset.
@@ -881,61 +971,53 @@ def mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id):
     return: score between predicted and test dataset
 
     '''
-    if args['grid_search'] == False:
-        hyperparam_list = get_best_mlp_hyperparameters(model_id)
-        clf = neural_network.MLPClassifier(hidden_layer_sizes=hyperparam_list['hidden_layer_sizes'],
-            activation=hyperparam_list['activation'], solver=hyperparam_list['solver'], alpha=hyperparam_list['alpha'])
-        if args['cross_validation'] == True:
-            score = cross_validation(clf, data, classes)
-            logging.info('[MLP] Expected accuracy: {}\n'.format(mean(score)))
-            return None, mean(score)
-
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
-
-    else:
+    clf = None
+    if args['grid_search'] == True:
         param_grid = {'hidden_layer_sizes': [(50,50,50), (50,100,50), (100,)],
                       'activation': ['tanh', 'relu'],
                       'solver': ['sgd', 'adam', 'lbfgs'],
                       'alpha': [0.0001, 0.05]}
 
-        grid = model_selection.GridSearchCV(neural_network.MLPClassifier(), param_grid, refit=True, verbose=3)
-        grid.fit(X_train, y_train)
+        clf = model_selection.RandomizedSearchCV(neural_network.MLPClassifier(), param_grid, refit=True, verbose=1, cv=5)
+        clf.fit(X_train, y_train)
 
-        logging.debug('[MLP] Best grid parameters: {}'.format(grid.best_params_))
-        logging.debug('[MLP] Best grid estimator: {}'.format(grid.best_estimator_))
+        logging.debug('[MLP] Best grid parameters: {}'.format(clf.best_params_))
+        logging.debug('[MLP] Best grid estimator: {}'.format(clf.best_estimator_))
 
-        y_pred = grid.predict(X_test)
+        y_pred = clf.predict(X_test)
+
+    else:
+        hyperparam_list = get_best_mlp_hyperparameters(model_id)
+        clf = neural_network.MLPClassifier(hidden_layer_sizes=hyperparam_list['hidden_layer_sizes'],
+            activation=hyperparam_list['activation'], solver=hyperparam_list['solver'], alpha=hyperparam_list['alpha'])
+
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+
+    if args['cross_validation'] == True:
+        score = cross_validation(clf, X_train, y_train)
+        logging.info('[MLP] Validity error: {}\n'.format(mean(score)))
 
     return metrics.classification_report(y_test, y_pred), metrics.accuracy_score(y_test, y_pred)
 
-def classification(data, classes, model_id):
+def classification(data_train, data_test, classes_train, classes_test, model_id):
     '''
-    Given data, classes and size parameter, function splits the data in groups for training and testing (size for test group is test_size).
-    Afterwards, function scales the training and test dataset, trains the model data using SVM, NB and MLP algorithms
+    Given data, classes and size parameter, function scales the training and test dataset, trains the model data using SVM, NB and MLP algorithms
     and calculates the accuracy between predicted and test data.
-    param input: data, classes and size parameter
-    return: None
+    param input: data, classes and model identifikator
+    return: accuracy score for every ML algorithm
 
     '''
-    test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.2
+    X_train, X_test = scaling(data_train, data_test)
 
-    X_train, X_test, y_train, y_test = model_selection.train_test_split(data, classes, test_size=test_size)
+    score, accuracy_svm = svm_classifier(X_train, X_test, classes_train, classes_test, model_id)
+    logging.info('[SVM] Report: {}\n'.format(score))
 
-    X_train, X_test = scaling(X_train, X_test)
-    if args['cross_validation'] == True:
-        data = preprocessing.minmax_scale(data)
+    score, accuracy_nb = nb_classifier(X_train, X_test, classes_train, classes_test, model_id)
+    logging.info('[NB] Report: {}\n'.format(score))
 
-    score_svm, accuracy_svm = svm_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
-
-    score_nb, accuracy_nb = nb_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
-
-    score_mlp, accuracy_mlp = mlp_classifier(data, classes, X_train, X_test, y_train, y_test, model_id)
-
-    if args['cross_validation'] == False:
-        logging.info('[SVM] Accuracy: {}\n'.format(score_svm))
-        logging.info('[NB] Accuracy: {}\n'.format(score_nb))
-        logging.info('[MLP] Accuracy: {}\n'.format(score_mlp))
+    score, accuracy_mlp = mlp_classifier(X_train, X_test, classes_train, classes_test, model_id)
+    logging.info('[MLP] Report: {}\n'.format(score))
 
     gc.collect()
 
@@ -998,154 +1080,215 @@ if __name__ == '__main__':
     # Install nltk dependencies
     nltk_dependencies()
 
-    # Define path to input files
-    srb_3_classes_path = 'data/SerbMR-3C.csv'
-    srb_2_classes_path = 'data/SerbMR-2C.csv'
-    eng_2_classes_path = 'data/review_polarity/txt_sentoken'
-    tur_2_classes_path = 'data/HUMIRSentimentDatasets.csv'
-
-    # Get the datasets for Serbian and English reviews
-    corpus_srb_3, classes_srb_3 = get_srb_corpus(srb_3_classes_path)
-    corpus_srb_2, classes_srb_2 = get_srb_corpus(srb_2_classes_path)
-    corpus_eng, classes_eng = get_eng_corpus(eng_2_classes_path)
-    corpus_tur, classes_tur = get_tur_corpus(tur_2_classes_path)
-
     # Init values to store accuracy
     values_srb_3, values_srb_2, values_eng, values_tur = [], [], [], []
 
-    # Get different corpus representations for Serbian corpus with three classses
-    bow_srb_3, unigram_srb_3, bigram_srb_3, bigram_unigram_srb_3, pos_tag_srb_3, position_srb_3, tf_srb_3, tf_idf_srb_3, w2v_srb_3 = text_preprocessing(corpus_srb_3, 'Serbian_3')
+    # Get train-test ratio division
+    test_size = int(args['test_percentage']) * 0.01 if args['test_percentage'] != None else 0.2
 
-    # Classification for all corpus representations
-    logging.info(' --- Serbian reviews (Bag Of Words Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_srb_3, classes_srb_3, 'bow_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Unigram Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_srb_3, classes_srb_3, 'unigram_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Bigram Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_srb_3, classes_srb_3, 'bigram_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Bigram + Unigram Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_srb_3, classes_srb_3, 'bigram_unigram_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Part Of Speech Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(pos_tag_srb_3, classes_srb_3, 'pos_tag_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Word Position Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_srb_3, classes_srb_3, 'position_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Term Frequency Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_srb_3, classes_srb_3, 'tf_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_srb_3, classes_srb_3, 'tf_idf_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Word2Vec Model) for three classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_srb_3, classes_srb_3, 'w2v_srb_3')
-    values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+    #############################################
+    ##### Serbian corpus with three classes #####
+    #############################################
+    if args['serbian_3'] == True:
 
-    # Get different corpus representations for Serbian corpus with two classses
-    bow_srb_2, unigram_srb_2, bigram_srb_2, bigram_unigram_srb_2, pos_tag_srb_2, position_srb_2, tf_srb_2, tf_idf_srb_2, w2v_srb_2 = text_preprocessing(corpus_srb_2, 'Serbian_2')
+        # Define path to corpus
+        srb_3_classes_path = 'data/SerbMR-3C.csv'
+        # Get the dataset
+        corpus, classes = get_srb_corpus(srb_3_classes_path)
+        # Split data
+        X_train, X_test, y_train, y_test = model_selection.train_test_split(corpus, classes, test_size=test_size, stratify=classes, random_state=101)
 
-    # Classification for all corpus representations
-    logging.info(' --- Serbian reviews (Bag Of Words Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_srb_2, classes_srb_2, 'bow_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Unigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_srb_2, classes_srb_2, 'unigram_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Bigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_srb_2, classes_srb_2, 'bigram_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Bigram + Unigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_srb_2, classes_srb_2, 'bigram_unigram_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Part Of Speech Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(pos_tag_srb_2, classes_srb_2, 'pos_tag_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Word Position Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_srb_2, classes_srb_2, 'position_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Term Frequency Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_srb_2, classes_srb_2, 'tf_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_srb_2, classes_srb_2, 'tf_idf_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Serbian reviews (Word2Vec Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_srb_2, classes_srb_2, 'w2v_srb_2')
-    values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        # Preprocess input data
+        corpus_train, cleaned_corpus_train = text_preprocessing(X_train, 'Serbian_3')
+        corpus_test, cleaned_corpus_test = text_preprocessing(X_test, 'Serbian_3')
 
-    # Get different corpus representations for English corpus with two classses
-    bow_eng, unigram_eng, bigram_eng, bigram_unigram_eng, pos_tag_eng, position_eng, tf_eng, tf_idf_eng, w2v_eng = text_preprocessing(corpus_eng, 'English_2')
+        # Get different corpus representations
+        list_of_train_models, list_of_test_models = create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpus_test, 'Serbian_3')
 
-    # Classification for all corpus representations
-    logging.info(' --- English reviews (Bag Of Words Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_eng, classes_eng, 'bow_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Unigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_eng, classes_eng, 'unigram_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Bigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_eng, classes_eng, 'bigram_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Bigram + Unigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_eng, classes_eng, 'bigram_unigram_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Part Of Speech Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(pos_tag_eng, classes_eng, 'pos_tag_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Word Position Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_eng, classes_eng, 'position_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Term Frequency Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_eng, classes_eng, 'tf_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_eng, classes_eng, 'tf_idf_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- English reviews (Word2Vec Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_eng, classes_eng, 'w2v_eng')
-    values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        # Classification for all corpus representations
+        logging.info(' --- Serbian reviews (Unigram Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[0], list_of_test_models[0], y_train, y_test, 'unigram_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Bigram Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[1], list_of_test_models[1], y_train, y_test, 'bigram_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Bigram + Unigram Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[2], list_of_test_models[2], y_train, y_test, 'bigram_unigram_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Bag Of Words Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[3], list_of_test_models[3], y_train, y_test, 'bow_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Part Of Speech Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[4], list_of_test_models[4], y_train, y_test, 'pos_tag_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Word Position Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[5], list_of_test_models[5], y_train, y_test, 'position_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Term Frequency Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7], list_of_test_models[7], y_train, y_test, 'tf_idf_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Word2Vec Model) for three classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[8], list_of_test_models[8], y_train, y_test, 'w2v_srb_3')
+        values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
 
-    # Get different corpus representations for Turkish corpus with two classses
-    bow_tur, unigram_tur, bigram_tur, bigram_unigram_tur, position_tur, tf_tur, tf_idf_tur, w2v_tur = text_preprocessing(corpus_tur, 'Turkish_2')
+    ###########################################
+    ##### Serbian corpus with two classes #####
+    ###########################################
+    if args['serbian_2'] == True:
 
-    # Classification for all corpus representations
-    logging.info(' --- Turkish reviews (Bag Of Words Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bow_tur, classes_tur, 'bow_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Unigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(unigram_tur, classes_tur, 'unigram_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Bigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_tur, classes_tur, 'bigram_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Bigram + Unigram Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(bigram_unigram_tur, classes_tur, 'bigram_unigram_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Word Position Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(position_tur, classes_tur, 'position_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Term Frequency Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_tur, classes_tur, 'tf_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(tf_idf_tur, classes_tur, 'tf_idf_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-    logging.info(' --- Turkish reviews (Word2Vec Model) for two classes --- \n')
-    accuracy_svm, accuracy_nb, accuracy_mlp = classification(w2v_tur, classes_tur, 'w2v_tur')
-    values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        # Define path to corpus
+        srb_2_classes_path = 'data/SerbMR-2C.csv'
+        # Get the dataset
+        corpus, classes = get_srb_corpus(srb_2_classes_path)
+        # Split data
+        X_train, X_test, y_train, y_test = model_selection.train_test_split(corpus, classes, test_size=test_size, stratify=classes, random_state=101)
 
-    # Plot the accuracy relative to ML algorithms and models generated from specific corpus
-    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
-    plot_results(values_srb_3, xticklabel, 'Serbian corpus with three classes')
-    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
-    plot_results(values_srb_2, xticklabel, 'Serbian corpus with two classes')
-    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
-    plot_results(values_eng, xticklabel, 'English corpus with two classes')
-    xticklabel = ('BOW', 'Unigram', 'Bigram', 'Bigram + Unigram', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
-    plot_results(values_tur, xticklabel, 'Turkish corpus with two classes')
+        # Preprocess input data
+        corpus_train, cleaned_corpus_train = text_preprocessing(X_train, 'Serbian_2')
+        corpus_test, cleaned_corpus_test = text_preprocessing(X_test, 'Serbian_2')
+
+        # Get different corpus representations
+        list_of_train_models, list_of_test_models = create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpus_test, 'Serbian_2')
+
+        # Classification for all corpus representations
+        logging.info(' --- Serbian reviews (Unigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[0], list_of_test_models[0], y_train, y_test, 'unigram_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Bigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[1], list_of_test_models[1], y_train, y_test, 'bigram_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Bigram + Unigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[2], list_of_test_models[2], y_train, y_test, 'bigram_unigram_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Bag Of Words Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[3], list_of_test_models[3], y_train, y_test, 'bow_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Part Of Speech Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[4], list_of_test_models[4], y_train, y_test, 'pos_tag_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Word Position Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[5], list_of_test_models[5], y_train, y_test, 'position_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Term Frequency Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7], list_of_test_models[7], y_train, y_test, 'tf_idf_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Serbian reviews (Word2Vec Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[8], list_of_test_models[8], y_train, y_test, 'w2v_srb_2')
+        values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+
+    ###########################################
+    ##### English corpus with two classes #####
+    ###########################################
+    if args['english_2'] == True:
+
+        # Define path to corpus
+        eng_2_classes_path = 'data/review_polarity/txt_sentoken'
+        # Get the dataset
+        corpus, classes = get_eng_corpus(eng_2_classes_path)
+        # Split data
+        X_train, X_test, y_train, y_test = model_selection.train_test_split(corpus, classes, test_size=test_size, stratify=classes, random_state=101)
+
+        # Preprocess input data
+        corpus_train, cleaned_corpus_train = text_preprocessing(X_train, 'English_2')
+        corpus_test, cleaned_corpus_test = text_preprocessing(X_test, 'English_2')
+
+        # Get different corpus representations
+        list_of_train_models, list_of_test_models = create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpus_test, 'English_2')
+
+        # Classification for all corpus representations
+        logging.info(' --- English reviews (Unigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[0], list_of_test_models[0], y_train, y_test, 'unigram_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Bigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[1], list_of_test_models[1], y_train, y_test, 'bigram_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Bigram + Unigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[2], list_of_test_models[2], y_train, y_test, 'bigram_unigram_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Bag Of Words Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[3], list_of_test_models[3], y_train, y_test, 'bow_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Part Of Speech Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[4], list_of_test_models[4], y_train, y_test, 'pos_tag_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Word Position Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[5], list_of_test_models[5], y_train, y_test, 'position_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Term Frequency Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7],  list_of_test_models[7], y_train, y_test, 'tf_idf_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- English reviews (Word2Vec Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[8], list_of_test_models[8], y_train, y_test, 'w2v_eng')
+        values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+
+    ###########################################
+    ##### Turkish corpus with two classes #####
+    ###########################################
+    if args['turkish_2'] == True:
+
+        # Define path to corpus
+        tur_2_classes_path = 'data/HUMIRSentimentDatasets.csv'
+        # Get the dataset
+        corpus, classes = get_tur_corpus(tur_2_classes_path)
+        # Split data
+        X_train, X_test, y_train, y_test = model_selection.train_test_split(corpus, classes, test_size=test_size, stratify=classes, random_state=101)
+
+        # Preprocess input data
+        corpus_train, cleaned_corpus_train = text_preprocessing(X_train, 'Turkish_2')
+        corpus_test, cleaned_corpus_test = text_preprocessing(X_test, 'Turkish_2')
+
+        # Get different corpus representations
+        list_of_train_models, list_of_test_models = create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpus_test, 'Turkish_2')
+
+        # Classification for all corpus representations
+        logging.info(' --- Turkish reviews (Unigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[0], list_of_test_models[0], y_train, y_test, 'unigram_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Bigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[1], list_of_test_models[1], y_train, y_test, 'bigram_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Bigram + Unigram Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[2], list_of_test_models[2], y_train, y_test, 'bigram_unigram_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Bag Of Words Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[3], list_of_test_models[3], y_train, y_test, 'bow_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Word Position Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[4], list_of_test_models[4], y_train, y_test, 'position_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Term Frequency Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[5], list_of_test_models[5], y_train, y_test, 'tf_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_idf_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+        logging.info(' --- Turkish reviews (Word2Vec Model) for two classes --- \n')
+        accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7], list_of_test_models[7], y_train, y_test, 'w2v_tur')
+        values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
+
+    #################################################################################################
+    ##### Plot the accuracy relative to ML algorithms and models generated from specific corpus #####
+    #################################################################################################
+    if args['serbian_3'] == True:
+        xticklabel = ('Unigram', 'Bigram', 'Bigram + Unigram', 'BOW', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+        plot_results(values_srb_3, xticklabel, 'Serbian corpus with three classes')
+    if args['serbian_2'] == True:
+        xticklabel = ('Unigram', 'Bigram', 'Bigram + Unigram', 'BOW', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+        plot_results(values_srb_2, xticklabel, 'Serbian corpus with two classes')
+    if args['english_2'] == True:
+        xticklabel = ('Unigram', 'Bigram', 'Bigram + Unigram', 'BOW', 'POS tag', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+        plot_results(values_eng, xticklabel, 'English corpus with two classes')
+    if args['turkish_2'] == True:
+        xticklabel = ('Unigram', 'Bigram', 'Bigram + Unigram', 'BOW', 'Word Position', 'TF', 'TF-IDF', 'Word2Vec')
+        plot_results(values_tur, xticklabel, 'Turkish corpus with two classes')
 
     plt.show()

@@ -9,8 +9,12 @@ import sentiment_analysis as sa
 
 corpus_srb = ["Film predstavlja odu životnom stilu jednog pacifiste.",
               "The 'Big Lewbowski' je klasična priča prevare, kriminala i spletkarenja viđena kroz oči skromnog čoveka."]
+corpus_test_srb = ["Film predstavlja pogled na budući svet.",
+                   "Film 'Big Lewbowski' je priča kriminala i ne dopada mi se."]
 corpus_eng = ["I don't like movie 'The Godfather' at all. It is terribly boring, long and uninteresting!",
               "I recommend everyone to watch the movie 'Memento'. I'm thrilled with it."]
+corpus_test_eng = ["I like movie 'Pulp Fiction' very much.",
+                   "Everyone should see new episodes of 'Game of Thrones'."]
 corpus_srb_cyrilic = ["Филм представља оду животном стилу једног пацифисте.",
                       "Тхе 'Big Lewbowski' је класична прича преваре, криминала и сплеткарења виђена кроз очи скромног човека."]
 
@@ -60,40 +64,55 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         self.assertTrue((stemmed_corpus_srb == expected_srb) and (stemmed_corpus_eng == expected_eng))
 
     def test_generate_ngrams_unigrams(self):
-        unigrams_srb = sa.generate_ngrams(corpus_srb, (1, 1))
-        unigrams_eng = sa.generate_ngrams(corpus_eng, (1, 1))
+        unigrams_srb, unigrams_test_srb = sa.generate_ngrams(corpus_srb, corpus_test_srb, (1, 1))
+        unigrams_eng, unigrams_test_eng = sa.generate_ngrams(corpus_eng, corpus_test_eng, (1, 1))
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
                                  [1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0]])
+        expected_test_srb = np.array([[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                      [1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]])
         expected_eng = np.array([[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0],
                                  [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1]])
+        expected_test_eng = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+                                      [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
-        self.assertTrue((np.array_equal(unigrams_srb, expected_srb)) and (np.array_equal(unigrams_eng, expected_eng)))
+        self.assertTrue((np.array_equal(unigrams_srb, expected_srb)) and (np.array_equal(unigrams_test_srb, expected_test_srb))
+            and (np.array_equal(unigrams_eng, expected_eng)) and (np.array_equal(unigrams_test_eng, expected_test_eng)))
 
     def test_generate_ngrams_bigrams(self):
-        bigrams_srb = sa.generate_ngrams(corpus_srb, (2, 2))
-        bigrams_eng = sa.generate_ngrams(corpus_eng, (2, 2))
+        bigrams_srb, bigrams_test_srb = sa.generate_ngrams(corpus_srb, corpus_test_srb, (2, 2))
+        bigrams_eng, bigrams_test_eng = sa.generate_ngrams(corpus_eng, corpus_test_eng, (2, 2))
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
                                  [1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0]])
+        expected_test_srb = np.array([[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                      [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
         expected_eng = np.array([[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0],
                                  [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1]])
+        expected_test_eng = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
-        self.assertTrue((np.array_equal(bigrams_srb, expected_srb)) and (np.array_equal(bigrams_eng, expected_eng)))
+        self.assertTrue((np.array_equal(bigrams_srb, expected_srb)) and (np.array_equal(bigrams_test_srb, expected_test_srb))
+            and (np.array_equal(bigrams_eng, expected_eng)) and (np.array_equal(bigrams_test_eng, expected_test_eng)))
 
     def test_generate_ngrams_bigrams_plus_unigrams(self):
-        bigrams_unigram_srb = sa.generate_ngrams(corpus_srb, (1, 2))
-        bigrams_unigram_eng = sa.generate_ngrams(corpus_eng, (1, 2))
+        bigrams_unigram_srb, bigrams_unigram_test_srb = sa.generate_ngrams(corpus_srb, corpus_test_srb, (1, 2))
+        bigrams_unigram_eng, bigrams_unigram_test_eng = sa.generate_ngrams(corpus_eng, corpus_test_eng, (1, 2))
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1],
                                  [1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0]])
+        expected_test_srb = np.array([[0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                      [1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
         expected_eng = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1]])
+        expected_test_eng = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
-        self.assertTrue((np.array_equal(bigrams_unigram_srb, expected_srb)) and (np.array_equal(bigrams_unigram_eng, expected_eng)))
+        self.assertTrue((np.array_equal(bigrams_unigram_srb, expected_srb)) and (np.array_equal(bigrams_unigram_test_srb, expected_test_srb))
+            and (np.array_equal(bigrams_unigram_eng, expected_eng)) and (np.array_equal(bigrams_unigram_test_eng, expected_test_eng)))
 
     def test_get_part_of_speech_words(self):
         cleaned_corpus_srb = sa.convert_to_latin(corpus_srb)
@@ -116,16 +135,24 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         cleaned_corpus_srb = sa.convert_to_latin(corpus_srb)
         cleaned_corpus_srb = sa.remove_punctuation(cleaned_corpus_srb, 'Serbian')
         cleaned_corpus_srb = sa.word_normalization(cleaned_corpus_srb, 'Serbian')
-        pos_tag_srb = sa.part_of_speech_tagging(cleaned_corpus_srb, 'Serbian')
-        pos_tag_eng = sa.part_of_speech_tagging(corpus_eng, 'English')
+        cleaned_corpus_test_srb = sa.convert_to_latin(corpus_test_srb)
+        cleaned_corpus_test_srb = sa.remove_punctuation(cleaned_corpus_test_srb, 'Serbian')
+        cleaned_corpus_test_srb = sa.word_normalization(cleaned_corpus_test_srb, 'Serbian')
+        pos_tag_srb, pos_tag_test_srb = sa.part_of_speech_tagging(cleaned_corpus_srb, cleaned_corpus_test_srb, 'Serbian')
+        pos_tag_eng, pos_tag_test_eng = sa.part_of_speech_tagging(corpus_eng, corpus_test_eng, 'English')
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0., 0., 1., 0., 1., 0., 0., 0., 0., 0., 1., 0., 1., 1., 0., 0., 0., 0., 1., 0., 0., 1.],
                                  [1., 1., 0., 1., 0., 1., 1., 1., 1., 1., 0., 1., 0., 0., 1., 1., 1., 1., 0., 1., 1., 0.]])
+        expected_test_srb = np.array([[0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [1., 0., 1., 1., 0., 0., 1., 0., 1., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0.]])
         expected_eng = np.array([[1., 1., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 1., 0., 1., 1., 1., 1., 0., 1., 0., 0., 0., 1., 0., 0.],
                                 [0., 1., 1., 0., 1., 0., 2., 0., 2., 0., 0., 0., 0., 0., 0., 1., 0., 1., 0., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1.]])
+        expected_test_eng = np.array([[0., 1., 0., 0., 0., 0., 1., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
 
-        self.assertTrue((np.allclose(pos_tag_srb, expected_srb)) and (np.allclose(pos_tag_eng, expected_eng)))
+        self.assertTrue((np.allclose(pos_tag_srb, expected_srb)) and (np.allclose(pos_tag_test_srb, expected_test_srb))
+            and (np.allclose(pos_tag_eng, expected_eng)) and (np.allclose(pos_tag_test_eng, expected_test_eng)))
 
     def test_get_word_position(self):
         word_position_srb = sa.get_word_position(corpus_srb)
@@ -145,16 +172,21 @@ class TestPreprocessFunctionalities(unittest.TestCase):
         self.assertTrue((word_position_srb == expected_srb) and (word_position_eng == expected_eng))
 
     def test_word_position_tagging(self):
-        position_srb = sa.word_position_tagging(corpus_srb)
-        position_eng = sa.word_position_tagging(corpus_eng)
+        position_srb, position_test_srb = sa.word_position_tagging(corpus_srb, corpus_test_srb)
+        position_eng, position_test_eng = sa.word_position_tagging(corpus_eng, corpus_test_eng)
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0., 0., 0., 1., 1., 0., 0., 0., 0., 1., 0., 0., 0., 1., 0., 1., 1., 0., 0., 0., 0., 1., 0., 0., 1.],
                                  [1., 1., 1., 1., 0., 1., 1., 1., 1., 0., 1., 1., 1., 0., 1., 0., 0., 1., 1., 1., 1., 0., 1., 1., 0.]])
+        expected_test_srb = np.array([[0., 0., 0., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [1., 1., 0., 1., 1., 1., 0., 1., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0.]])
         expected_eng = np.array([[1., 1., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1., 1., 1., 1., 1., 0., 1., 0., 1., 1., 1., 0., 1., 0., 1., 0., 0., 0., 1., 0., 0.],
                                  [0., 1., 1., 0., 1., 0., 1., 1., 0., 1., 1., 0., 0., 0., 0., 0., 0., 1., 0., 1., 0., 0., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1.]])
+        expected_test_eng = np.array([[0., 1., 0., 0., 0., 0., 1., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
 
-        self.assertTrue((np.allclose(position_srb, expected_srb)) and (np.allclose(position_eng, expected_eng)))
+        self.assertTrue((np.allclose(position_srb, expected_srb)) and (np.allclose(position_test_srb, expected_test_srb))
+            and (np.allclose(position_eng, expected_eng)) and (np.allclose(position_test_eng, expected_test_eng)))
 
     def test_create_vocabulary(self):
         tagged_position_corpus_eng = sa.get_word_position(corpus_eng)
@@ -171,18 +203,18 @@ class TestPreprocessFunctionalities(unittest.TestCase):
 
         self.assertTrue((vocabulary_position_eng == expected_position_eng) and (vocabulary_pos_tag_eng == expected_pos_tag_eng))
 
-    def test_create_model(self):
+    def test_create_vector_model(self):
         tagged_position_corpus_eng = sa.get_word_position(corpus_eng)
         tagged_pos_tag_corpus_eng = sa.get_part_of_speech_words(corpus_eng, 'English')
 
         vocabulary_position_eng = sa.create_vocabulary(tagged_position_corpus_eng)
         vocabulary_pos_tag_eng = sa.create_vocabulary(tagged_pos_tag_corpus_eng)
 
-        position_model_eng = sa.create_model(tagged_position_corpus_eng, vocabulary_position_eng)
-        pos_tagging_model_eng = sa.create_model(tagged_pos_tag_corpus_eng, vocabulary_pos_tag_eng)
+        position_model_eng = sa.create_vector_model(tagged_position_corpus_eng, vocabulary_position_eng)
+        pos_tagging_model_eng = sa.create_vector_model(tagged_pos_tag_corpus_eng, vocabulary_pos_tag_eng)
 
         # NOTE: arrays are in alphabetical order
-        expected_position_eng = np.array([[1., 1., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1., 1., 1., 1., 1., 0., 1., 0., 1., 1., 1., 0., 1., 0., 1., 0., 0., 0., 1., 0., 0.],
+        expected_position_eng = np. array([[1., 1., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1., 1., 1., 1., 1., 0., 1., 0., 1., 1., 1., 0., 1., 0., 1., 0., 0., 0., 1., 0., 0.],
                                           [0., 1., 1., 0., 1., 0., 1., 1., 0., 1., 1., 0., 0., 0., 0., 0., 0., 1., 0., 1., 0., 0., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1.]])
         expected_pos_tag_eng = np.array([[1., 1., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 1., 0., 1., 1., 1., 1., 0., 1., 0., 0., 0., 1., 0., 0.],
                                          [0., 1., 1., 0., 1., 0., 2., 0., 2., 0., 0., 0., 0., 0., 0., 1., 0., 1., 0., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 1.]])
@@ -191,28 +223,38 @@ class TestPreprocessFunctionalities(unittest.TestCase):
 
     def test_compute_tf(self):
 
-        tf_srb = sa.compute_tf(corpus_srb)
-        tf_eng = sa.compute_tf(corpus_eng)
+        tf_srb, tf_test_srb = sa.compute_tf(corpus_srb,corpus_test_srb)
+        tf_eng, tf_test_eng = sa.compute_tf(corpus_eng, corpus_test_eng)
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0., 0., 0., 0.14285714, 0., 0., 0., 0., 0.14285714, 0., 0.14285714, 0.14285714, 0., 0., 0., 0., 0.14285714, 0., 0., 0., 0.14285714],
                                  [0., 0., 0.07142857, 0., 0.07142857, 0.07142857, 0.07142857, 0., 0., 0.07142857, 0., 0., 0.07142857, 0.07142857, 0.07142857, 0.07142857, 0., 0., 0.07142857, 0.07142857, 0.]])
+        expected_test_srb = np.array([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.16666667, 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [0., 0., 0.1, 0., 0., 0.1, 0., 0., 0., 0., 0., 0., 0., 0.1, 0., 0., 0., 0., 0., 0., 0.]])
         expected_eng = np.array([[0.07142857, 0.07142857, 0.07142857, 0.07142857, 0., 0., 0., 0.07142857, 0., 0.07142857, 0.07142857, 0., 0.07142857, 0., 0.07142857, 0., 0., 0., 0.07142857, 0., 0.],
                                  [0., 0., 0., 0., 0., 0.1, 0., 0., 0.1, 0., 0., 0., 0.1, 0.1, 0., 0.1, 0.1, 0.1, 0., 0.1, 0.1]])
+        expected_test_eng = np.array([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0.16666667, 0., 0., 0.16666667, 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
 
-        self.assertTrue((np.allclose(tf_srb, expected_srb)) and (np.allclose(tf_eng, expected_eng)))
+        self.assertTrue((np.allclose(tf_srb, expected_srb)) and (np.allclose(tf_test_srb, expected_test_srb))
+            and (np.allclose(tf_eng, expected_eng)) and (np.allclose(tf_test_eng, expected_test_eng)))
 
     def test_compute_tf_idf(self):
-        tf_idf_srb = sa.compute_tf_idf(corpus_srb)
-        tf_idf_eng = sa.compute_tf_idf(corpus_eng)
+        tf_idf_srb, tf_idf_test_srb = sa.compute_tf_idf(corpus_srb, corpus_test_srb)
+        tf_idf_eng, tf_idf_test_eng = sa.compute_tf_idf(corpus_eng, corpus_test_eng)
 
         # NOTE: arrays are in alphabetical order
         expected_srb = np.array([[0., 0.37796447, 0., 0.37796447, 0., 0., 0., 0., 0.37796447, 0., 0.37796447, 0.37796447, 0., 0., 0., 0., 0.37796447, 0., 0., 0., 0.37796447],
                                  [0.26726124, 0., 0.26726124, 0., 0.26726124, 0.26726124, 0.26726124, 0.26726124, 0., 0.26726124, 0., 0., 0.26726124, 0.26726124, 0.26726124, 0.26726124, 0., 0.26726124, 0.26726124, 0.26726124, 0.]])
+        expected_test_srb = np.array([[0., 0.70710678, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.70710678, 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [0.40824829, 0.40824829, 0.40824829, 0., 0., 0.40824829, 0., 0.40824829, 0., 0., 0., 0., 0., 0.40824829, 0., 0., 0., 0., 0., 0., 0.]])
         expected_eng = np.array([[0.28263102, 0.28263102, 0.28263102, 0.28263102, 0.28263102, 0., 0.28263102, 0.28263102, 0.2010943, 0.28263102, 0.28263102, 0., 0.2010943, 0., 0.28263102, 0.2010943, 0., 0., 0.28263102, 0., 0.],
                                  [0., 0., 0., 0., 0., 0.34261985, 0., 0., 0.24377685, 0., 0., 0.34261985, 0.24377685, 0.34261985, 0., 0.24377685, 0.34261985, 0.34261985, 0., 0.34261985, 0.34261985]])
+        expected_test_eng = np.array([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0.81480247, 0., 0., 0.57973867, 0., 0., 0., 0., 0., 0., 0., 0.],
+                                      [0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
 
-        self.assertTrue((np.allclose(tf_idf_srb, expected_srb)) and (np.allclose(tf_idf_eng, expected_eng)))
+        self.assertTrue((np.allclose(tf_idf_srb, expected_srb)) and (np.allclose(tf_idf_test_srb, expected_test_srb))
+            and (np.allclose(tf_idf_eng, expected_eng)) and (np.allclose(tf_idf_test_eng, expected_test_eng)))
 
 if __name__ == '__main__':
     unittest.main()
