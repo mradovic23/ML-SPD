@@ -25,8 +25,8 @@
   - Bigram + unigram model
   - Part of speech (POS) model (except for Turkish corpus)
   - Word position in text model
-  - Term frequency model (for unigrams)
-  - Term frequency - inverse data frequency model (for unigrams)
+  - Term frequency model (for BOW model)
+  - Term frequency - inverse document frequency model (for BOW model)
   - Word to vector model
 
 - Additional:
@@ -77,3 +77,13 @@
   - set the option for grid search e.g. "python sentiment_analysis.py -g"
   - type "python sentiment_analysis.py --help" to show all argument options
 - Testing: go to src/test folder and type "python test_sentiment_analysis.py"
+
+## Results:
+### Serbian corpus with three classes
+![alt text](src/results/serbian_corpus_with_three_classes.png)
+### Serbian corpus with two classes
+![alt text](src/results/serbian_corpus_with_two_classes.png)
+### English corpus with two classes
+![alt text](src/results/english_corpus_with_two_classes.png)
+### Turkish corpus with two classes
+![alt text](src/results/turkish_corpus_with_two_classes.png)

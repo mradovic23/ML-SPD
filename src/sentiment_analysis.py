@@ -544,7 +544,7 @@ def compute_tf_idf(corpus_train, corpus_test):
     Given train and test corpus, function calculates the weight of rare words across all documents in the corpus and returns a matrix of tf-idf.
     Test model is built according to train model.
     param input: train and test corpus
-    return: matrix of term frequencies - inverse data frequencies (for train and test corpus)
+    return: matrix of term frequencies - inverse document frequencies (for train and test corpus)
 
     '''
     vectorizer = TfidfVectorizer()
@@ -564,11 +564,12 @@ def generate_word2vec(corpus_train, corpus_test):
 
     '''
     all_words = [nltk.word_tokenize(doc) for doc in corpus_train]
-    w2v_model = Word2Vec(all_words, sg=1, size=800, iter=30)
+    hidden_layer_size = 800
+    w2v_model = Word2Vec(all_words, sg=1, size=hidden_layer_size, iter=30)
 
     train, test = [], []
     for c in corpus_train:
-        temp = pd.DataFrame(np.zeros((1, len(w2v_model.wv.vocab))))
+        temp = pd.DataFrame(np.zeros((1, hidden_layer_size)))
         for w in nltk.word_tokenize(c):
             try:
                 word_vec = w2v_model[w]
@@ -579,7 +580,7 @@ def generate_word2vec(corpus_train, corpus_test):
         train.append(temp)
 
     for c in corpus_test:
-        temp = pd.DataFrame(np.zeros((1, len(w2v_model.wv.vocab))))
+        temp = pd.DataFrame(np.zeros((1, hidden_layer_size)))
         for w in nltk.word_tokenize(c):
             try:
                 word_vec = w2v_model[w]
@@ -624,12 +625,12 @@ def create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpu
     - part of speech model
     - word position model
     - term frequency model
-    - term frequency - inverse data frequency model
+    - term frequency - inverse document frequency model
     - word to vector model
     Test models are built according to train models.
     param input: corpuses, language indicator
     return: list of train and test models - unigram model, bigram model, bigram + unigram model, bag of words model, part of speech model,
-            word position model, term frequency model, term frequency - inverse data frequency model, word to vector model
+            word position model, term frequency model, term frequency - inverse document frequency model, word to vector model
 
     '''
     num_of_classes = int(language[-1])
@@ -690,10 +691,10 @@ def create_models(corpus_train, cleaned_corpus_train, corpus_test, cleaned_corpu
     list_of_train_models.append(tf_model_train)
     list_of_test_models.append(tf_model_test)
 
-    # Get the term frequency - inverse data frequency model
+    # Get the term frequency - inverse document frequency model
     tf_idf_model_train, tf_idf_model_test = compute_tf_idf(cleaned_corpus_train, cleaned_corpus_test)
-    logging.debug('Term frequency - inverse data frequency train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model_train))
-    logging.debug('Term frequency - inverse data frequency test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model_test))
+    logging.debug('Term frequency - inverse document frequency train model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model_train))
+    logging.debug('Term frequency - inverse document frequency test model for {} reviews with {} classes:\n {}'.format(language, num_of_classes, tf_idf_model_test))
     list_of_train_models.append(tf_idf_model_train)
     list_of_test_models.append(tf_idf_model_test)
 
@@ -771,14 +772,14 @@ def get_best_svm_hyperparameters(model_id):
         'tf_idf_eng': {'C': 1000, 'gamma': 0.01, 'kernel': 'rbf'},
         'w2v_eng': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
         # Turkish language with two classes
-        'unigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'bigram_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'bigram_unigram_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'bow_tur': {'C': 0.1, 'gamma': 1, 'kernel': 'linear'},
-        'position_tur': {'C': 1000, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'tf_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'},
-        'tf_idf_tur': {'C': 1, 'gamma': 1, 'kernel': 'linear'},
-        'w2v_tur': {'C': 10, 'gamma': 0.01, 'kernel': 'rbf'}
+        'unigram_tur': {'C': 0.1, 'gamma': 0.01, 'kernel': 'linear'},
+        'bigram_tur': {'C': 0.1, 'gamma': 0.1, 'kernel': 'linear'},
+        'bigram_unigram_tur': {'C': 0.1, 'gamma': 0.0001, 'kernel': 'linear'},
+        'bow_tur': {'C': 0.1, 'gamma': 0.0001, 'kernel': 'linear'},
+        'position_tur': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_tur': {'C': 100, 'gamma': 0.001, 'kernel': 'rbf'},
+        'tf_idf_tur': {'C': 0.1, 'gamma': 0.001, 'kernel': 'linear'},
+        'w2v_tur': {'C': 100, 'gamma': 0.0001, 'kernel': 'rbf'}
     }
 
     return switcher.get(model_id, '[SVM] Invalid model id\n')
@@ -863,11 +864,11 @@ def get_best_nb_hyperparameters(model_id):
         'unigram_tur': {'alpha': 1.5, 'fit_prior': True},
         'bigram_tur': {'alpha': 1.5, 'fit_prior': True},
         'bigram_unigram_tur': {'alpha': 1.5, 'fit_prior': True},
-        'bow_tur': {'alpha': 1.0, 'fit_prior': False},
-        'position_tur': {'alpha': 1.0, 'fit_prior': True},
+        'bow_tur': {'alpha': 1.5, 'fit_prior': True},
+        'position_tur': {'alpha': 1.5, 'fit_prior': True},
         'tf_tur': {'alpha': 1.5, 'fit_prior': True},
         'tf_idf_tur': {'alpha': 1.5, 'fit_prior': True},
-        'w2v_tur': {'alpha': 1.5, 'fit_prior': True}
+        'w2v_tur': {'alpha': 0.5, 'fit_prior': True}
     }
 
     return switcher.get(model_id, '[NB] Invalid model id\n')
@@ -948,14 +949,14 @@ def get_best_mlp_hyperparameters(model_id):
         'tf_idf_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05},
         'w2v_eng': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
         # Turkish language with two classes
-        'unigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
-        'bigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.0001},
-        'bigram_unigram_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.05},
-        'bow_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.0001},
-        'position_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
-        'tf_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
-        'tf_idf_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
-        'w2v_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'lbfgs', 'alpha': 0.05}
+        'unigram_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.0001},
+        'bigram_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
+        'bigram_unigram_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'relu', 'solver': 'sgd', 'alpha': 0.0001},
+        'bow_tur': {'hidden_layer_sizes': (100,), 'activation': 'tanh', 'solver': 'sgd', 'alpha': 0.05},
+        'position_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.0001},
+        'tf_tur': {'hidden_layer_sizes': (100,), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05},
+        'tf_idf_tur': {'hidden_layer_sizes': (50,50,50), 'activation': 'tanh', 'solver': 'adam', 'alpha': 0.0001},
+        'w2v_tur': {'hidden_layer_sizes': (50,100,50), 'activation': 'relu', 'solver': 'adam', 'alpha': 0.05}
     }
 
     return switcher.get(model_id, '[MLP] Invalid model id\n')
@@ -1031,7 +1032,7 @@ def autolabel(rects, axis):
     '''
     for rect in rects:
         h = rect.get_height()
-        axis.text(rect.get_x() + rect.get_width() / 2., 1.05 * h, '%.2f' % float(h), ha='center', va='bottom')
+        axis.text(rect.get_x() + rect.get_width() / 2., 1.01 * h, '%.2f' % float(h), ha='center', va='bottom')
 
 def plot_results(values, xticklabel, x_label):
     '''
@@ -1039,9 +1040,9 @@ def plot_results(values, xticklabel, x_label):
 
     '''
     ind = np.arange(len(values))
-    width = 0.2
+    width = 0.25
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(20,9))
     ax = fig.add_subplot(111)
 
     svm_val = [item[0] for item in values]
@@ -1056,7 +1057,7 @@ def plot_results(values, xticklabel, x_label):
     ax.set_ylabel('Accuracy')
     ax.set_xticks(ind + width)
     ax.set_xticklabels(xticklabel)
-    ax.legend((rects1[0], rects2[0], rects3[0]), ('SVM', 'NB', 'MLP'))
+    ax.legend((rects1[0], rects2[0], rects3[0]), ('SVM', 'NB', 'MLP'), bbox_to_anchor=(1,1), loc="upper left")
 
     autolabel(rects1, ax)
     autolabel(rects2, ax)
@@ -1065,8 +1066,9 @@ def plot_results(values, xticklabel, x_label):
     if not os.path.exists('results'):
         os.makedirs('results')
 
-    file_name = 'results/' + x_label.replace(' ', '_').lower() + '.pdf'
-    plt.savefig(file_name, format='pdf')
+    file_name = 'results/' + x_label.replace(' ', '_').lower() + '.png'
+    plt.savefig(file_name, format='png')
+
     plt.draw()
 
 if __name__ == '__main__':
@@ -1127,7 +1129,7 @@ if __name__ == '__main__':
         logging.info(' --- Serbian reviews (Term Frequency Model) for three classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_srb_3')
         values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-        logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for three classes --- \n')
+        logging.info(' --- Serbian reviews (Term Frequency - Inverse Document Frequency Model) for three classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7], list_of_test_models[7], y_train, y_test, 'tf_idf_srb_3')
         values_srb_3.append([accuracy_svm, accuracy_nb, accuracy_mlp])
         logging.info(' --- Serbian reviews (Word2Vec Model) for three classes --- \n')
@@ -1175,7 +1177,7 @@ if __name__ == '__main__':
         logging.info(' --- Serbian reviews (Term Frequency Model) for two classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_srb_2')
         values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-        logging.info(' --- Serbian reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+        logging.info(' --- Serbian reviews (Term Frequency - Inverse Document Frequency Model) for two classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7], list_of_test_models[7], y_train, y_test, 'tf_idf_srb_2')
         values_srb_2.append([accuracy_svm, accuracy_nb, accuracy_mlp])
         logging.info(' --- Serbian reviews (Word2Vec Model) for two classes --- \n')
@@ -1223,7 +1225,7 @@ if __name__ == '__main__':
         logging.info(' --- English reviews (Term Frequency Model) for two classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_eng')
         values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-        logging.info(' --- English reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+        logging.info(' --- English reviews (Term Frequency - Inverse Document Frequency Model) for two classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[7],  list_of_test_models[7], y_train, y_test, 'tf_idf_eng')
         values_eng.append([accuracy_svm, accuracy_nb, accuracy_mlp])
         logging.info(' --- English reviews (Word2Vec Model) for two classes --- \n')
@@ -1268,7 +1270,7 @@ if __name__ == '__main__':
         logging.info(' --- Turkish reviews (Term Frequency Model) for two classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[5], list_of_test_models[5], y_train, y_test, 'tf_tur')
         values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
-        logging.info(' --- Turkish reviews (Term Frequency - Inverse Data Frequency Model) for two classes --- \n')
+        logging.info(' --- Turkish reviews (Term Frequency - Inverse Document Frequency Model) for two classes --- \n')
         accuracy_svm, accuracy_nb, accuracy_mlp = classification(list_of_train_models[6], list_of_test_models[6], y_train, y_test, 'tf_idf_tur')
         values_tur.append([accuracy_svm, accuracy_nb, accuracy_mlp])
         logging.info(' --- Turkish reviews (Word2Vec Model) for two classes --- \n')
