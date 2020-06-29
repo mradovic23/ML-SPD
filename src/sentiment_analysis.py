@@ -1151,6 +1151,7 @@ def plot_results(values, xticklabel, x_label):
     ax.set_ylabel('Accuracy')
     ax.set_xticks(ind + xtick_offset)
     ax.set_xticklabels(xticklabel)
+    ax.set_ylim(0.4)
     if args['serbian_3'] == True:
         ax.legend((rects1[0], rects2[0], rects3[0]), ('SVM', 'NB', 'MLP'), bbox_to_anchor=(1,1), loc="upper left")
     else:
